@@ -1,0 +1,4 @@
+How to compile:
+g++ -Wall -D_FILE_OFFSET_BITS=64  -lfuse -c "%f"
+how to Build:
+g++ -Wall -D_FILE_OFFSET_BITS=64 -lfuse -o "%e" "%f"
