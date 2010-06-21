@@ -6,22 +6,29 @@
 #include <fcntl.h>
 #include <string.h>
 #include <cstdlib>
-
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <iostream>
 #include <queue>
 #include <vector>
+#include <map>
 
 using namespace std;
 
-void strip_quotes(string&,const string,string);
+struct fileCache{
+    time_t timestamp;
+    queue<string> statOutput;
+};
+
+void string_replacer(string&,const string,string);
 queue<string> adb_push(string, string);
 queue<string> adb_pull(string, string);
 queue<string> adb_shell(string);
 queue<string> shell(string);
 queue<string> exec_command(string);
 vector<string> make_array(string);
+map<string,fileCache> fileData;
 
 vector<string> make_array(string data){
     vector<string> result;
@@ -41,9 +48,9 @@ vector<string> make_array(string data){
 queue<string> shell(string command)
 {
     string actual_command;
-    strip_quotes(command,"\\","\\\\");
-    strip_quotes(command,"'","\\'");
-    strip_quotes(command,"`","\\`");
+    string_replacer(command,"\\","\\\\");
+    string_replacer(command,"'","\\'");
+    string_replacer(command,"`","\\`");
     actual_command.append(command);
 
     return exec_command(actual_command);
@@ -52,12 +59,12 @@ queue<string> shell(string command)
 queue<string> adb_shell(string command)
 {
     string actual_command;
-    strip_quotes(command,"\\","\\\\");
-    strip_quotes(command,"'","\\'");
-    strip_quotes(command,"`","\\`");
-    actual_command = "adb shell '";
+    string_replacer(command,"\\","\\\\");
+    string_replacer(command,"'","\\'");
+    string_replacer(command,"`","\\`");
+    actual_command = "adb shell ";
     actual_command.append(command);
-    actual_command.append("'");
+    //actual_command.append("'");
 
     return exec_command(actual_command);
 }
@@ -65,12 +72,12 @@ queue<string> adb_shell(string command)
 queue<string> adb_pull(string remote_source, string local_destination)
 {
     string actual_command;
-    strip_quotes(remote_source,"\\","\\\\");
-    strip_quotes(remote_source,"'","\\'");
-    strip_quotes(remote_source,"`","\\`");
-    strip_quotes(local_destination,"\\","\\\\");
-    strip_quotes(local_destination,"'","\\'");
-    strip_quotes(local_destination,"`","\\`");
+    string_replacer(remote_source,"\\","\\\\");
+    string_replacer(remote_source,"'","\\'");
+    string_replacer(remote_source,"`","\\`");
+    string_replacer(local_destination,"\\","\\\\");
+    string_replacer(local_destination,"'","\\'");
+    string_replacer(local_destination,"`","\\`");
     actual_command = "adb pull '";
     actual_command.append(remote_source);
     actual_command.append("' '");
@@ -83,12 +90,12 @@ queue<string> adb_pull(string remote_source, string local_destination)
 queue<string> adb_push(string local_source, string remote_destination)
 {
     string actual_command;
-    strip_quotes(remote_destination,"\\","\\\\");
-    strip_quotes(remote_destination,"'","\\'");
-    strip_quotes(remote_destination,"`","\\`");
-    strip_quotes(local_source,"\\","\\\\");
-    strip_quotes(local_source,"'","\\'");
-    strip_quotes(local_source,"`","\\`");
+    string_replacer(remote_destination,"\\","\\\\");
+    string_replacer(remote_destination,"'","\\'");
+    string_replacer(remote_destination,"`","\\`");
+    string_replacer(local_source,"\\","\\\\");
+    string_replacer(local_source,"'","\\'");
+    string_replacer(local_source,"`","\\`");
     actual_command = "adb push '";
     actual_command.append(local_source);
     actual_command.append("' '");
@@ -117,13 +124,14 @@ queue<string> exec_command(string command)
     return output;
 }
 
-void strip_quotes( string &source, const string find, string replace ) {
-
+void string_replacer( string &source, const string find, string replace ) {
 	size_t j;
-	for ( ; (j = source.find( find )) != string::npos ; ) {
+	for ( ; (j = source.find( find,j)) != string::npos ; ) {
 		source.replace( j, find.length(), replace );
+        j = j + replace.length();
 	}
 }
+
 int xtoi(const char* xs, unsigned int* result)
 {
  size_t szlen = strlen(xs);
@@ -176,19 +184,29 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 {
     int res = 0;
     memset(stbuf, 0, sizeof(struct stat));
-
+    queue<string> output;
     string path_string;
     path_string.assign(path);
-
-    queue<string> output;
-    string command = "stat -t \"";
-    command.append(path_string);
-    command.append("\"");
-    cout << command<<"\n";
-    output = adb_shell(command);
+    string_replacer(path_string," ","\\ ");
+    
+    if (fileData.find(path_string) ==  fileData.end() || fileData[path_string].timestamp + 30 > time(NULL)){
+        string command = "stat -t \"";
+        command.append(path_string);
+        command.append("\"");
+        cout << command<<"\n";
+        output = adb_shell(command);
+        fileData[path_string].statOutput = output;
+        fileData[path_string].timestamp = time(NULL);
+    }else{
+        output = fileData[path_string].statOutput;
+        cout << "from cache " << output.front() <<"\n";
+    }
     vector<string> output_chunk = make_array(output.front());
     if (output_chunk.size() < 13){
         return -ENOENT;
+    }
+    while (output_chunk.size() > 15){
+        output_chunk.erase( output_chunk.begin());
     }
     /*
     stat -t Explained:
@@ -240,7 +258,8 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	(void) fi;
     string path_string;
     path_string.assign(path);
-
+    string_replacer(path_string," ","\\ ");
+    
     queue<string> output;
     string command = "ls -1a \"";
     command.append(path_string);
@@ -259,9 +278,26 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int adb_open(const char *path, struct fuse_file_info *fi)
 {
+    string path_string;
+    string local_path_string;
+    path_string.assign(path);
+    local_path_string.assign("/tmp/adbfs");
+    local_path_string.append(path_string);
+    string_replacer(local_path_string," ","\\ ");
+    
+    queue<string> output;
+    string command = "stat -t \"";
+    command.append(path_string);
+    command.append("\"");
+    cout << command<<"\n";
+    output = adb_shell(command);
+    vector<string> output_chunk = make_array(output.front());
+    if (output_chunk.size() < 13){
+        return -ENOENT;
+    }
 
-    if((fi->flags & 3) != O_RDONLY)
-        return -EACCES;
+    adb_pull(path_string,local_path_string);
+    
 
     return 0;
 }
@@ -269,7 +305,30 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
 static int adb_read(const char *path, char *buf, size_t size, off_t offset,
                       struct fuse_file_info *fi)
 {
-    return -ENOENT;
+    int fd;
+    int res;
+    string local_path_string;
+    local_path_string.assign("/tmp/adbfs");
+    local_path_string.append(path);
+
+
+    fd = open(local_path_string.c_str(), O_RDONLY);
+    
+    if(fd == -1)
+        return -errno;
+        
+    res = pread(fd, buf, size, offset);
+        if(res == -1)
+            res = -errno;
+        
+    
+    return size;
+}
+
+
+static int adb_access(const char *path, int mask) {
+    //###cout << "###access[path=" << path << "]" <<  endl;
+    return 0;
 }
 
 static struct fuse_operations adbfs_oper;
@@ -279,6 +338,7 @@ int main(int argc, char *argv[])
     memset(&adbfs_oper, sizeof(adbfs_oper), 0);
     adbfs_oper.readdir= adb_readdir;
     adbfs_oper.getattr= adb_getattr;
+    adbfs_oper.access= adb_access;
     adbfs_oper.open= adb_open;
     adbfs_oper.read= adb_read;
 	return fuse_main(argc, argv, &adbfs_oper, NULL);
