@@ -1,4 +1,7 @@
-How to compile:
-g++ -Wall -D_FILE_OFFSET_BITS=64  -lfuse -c "%f"
-how to Build:
-g++ -Wall -D_FILE_OFFSET_BITS=64 -lfuse -o "%e" "%f"
+Instructions:
+
+Install: Put the compiled binary into your <path-to-android-sdk>/tools directory
+
+Use: $ adbfs <Mountpoint>
+
+
