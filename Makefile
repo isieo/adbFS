@@ -7,4 +7,4 @@ all:	$(TARGET)
 
 .PHONY: clean
 clean:
-	rm -rf $(TARGET)
+	rm -rf *.o
