@@ -86,7 +86,7 @@ queue<string> adb_push(string local_source, string remote_destination)
     actual_command.append("' '");
     actual_command.append(remote_destination);
     actual_command.append("'");
-    
+
     cout << "Adb command : " <<actual_command << "\n";
     return exec_command(actual_command);
 }
@@ -101,7 +101,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     string path_string;
     path_string.assign(path);
     //string_replacer(path_string," ","\\ ");
-    
+
     if (true || fileData.find(path_string) ==  fileData.end() || fileData[path_string].timestamp + 30 > time(NULL)){
         string command = "stat -t \"";
         command.append(path_string);
@@ -178,13 +178,16 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     path_string.assign(path);
     //mkdir(local_path_string.c_str(),0755);
     string_replacer(path_string," ","\\ ");
-    
+
     queue<string> output;
     string command = "ls -1a \"";
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
-
+    vector<string> output_chunk = make_array(output.front());
+    if (output_chunk.size() >6){
+        return -ENOENT;
+    }
     while (output.size() > 0){
         filler(buf, output.front().c_str(), NULL, 0);
         output.pop();
@@ -216,14 +219,14 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
         if (output_chunk.size() < 13){
             return -ENOENT;
         }
-        
+
         adb_pull(path_string,local_path_string);
     }else{
         fileTruncated[path_string] = false;
     }
-    
+
     fi->fh = open(local_path_string.c_str(), fi->flags);
-    
+
     return 0;
 }
 
@@ -239,7 +242,7 @@ static int adb_read(const char *path, char *buf, size_t size, off_t offset,
     //close(fd);
     if(res == -1)
         res = -errno;
-        
+
     return size;
 }
 
@@ -250,11 +253,11 @@ static int adb_write(const char *path, const char *buf, size_t size, off_t offse
     //local_path_string.assign("/tmp/adbfs/");
     //local_path_string.append(path_string);
     //string_replacer(local_path_string," ","\\ ");
-    
+
     int fd = fi->fh; //open(local_path_string.c_str(), O_CREAT|O_RDWR|O_TRUNC);
-    
+
     filePendingWrite[fd] = true;
-    
+
     int res = pwrite(fd, buf, size, offset);
     //close(fd);
     //adb_push(local_path_string,path_string);
@@ -319,13 +322,13 @@ static int adb_utimens(const char *path, const struct timespec ts[2]) {
 static int adb_truncate(const char *path, off_t size) {
     string path_string;
     string local_path_string;
-    path_string.assign(path);    
+    path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
     local_path_string.assign("/tmp/adbfs/");
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-    
+
     queue<string> output;
     string command = "stat -t \"";
     command.append(path_string);
@@ -336,11 +339,11 @@ static int adb_truncate(const char *path, off_t size) {
     if (output_chunk.size() < 13){
         adb_pull(path_string,local_path_string);
     }
-    
+
     fileTruncated[path_string] = true;
-    
+
     cout << "truncate[path=" << local_path_string << "][size=" << size << "]" << endl;
-    
+
 	return truncate64(local_path_string.c_str(),size);
 }
 
@@ -359,14 +362,14 @@ static int adb_mknod(const char *path, mode_t mode, dev_t rdev) {
     adb_shell("sync");
 
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    
+
 	return 0;
 }
 
 static int adb_mkdir(const char *path, mode_t mode) {
     string path_string;
     string local_path_string;
-    path_string.assign(path);    
+    path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
     local_path_string.assign("/tmp/adbfs/");
     string_replacer(path_string,"/","-");
@@ -398,13 +401,13 @@ static int adb_rename(const char *from, const char *to) {
 static int adb_rmdir(const char *path) {
     string path_string;
     string local_path_string;
-    path_string.assign(path);    
+    path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
     local_path_string.assign("/tmp/adbfs/");
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-    
+
     string command = "rmdir '";
     command.append(path_string);
     command.append("'");
@@ -417,13 +420,13 @@ static int adb_rmdir(const char *path) {
 static int adb_unlink(const char *path) {
     string path_string;
     string local_path_string;
-    path_string.assign(path);    
+    path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
     local_path_string.assign("/tmp/adbfs/");
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-    
+
     string command = "rm '";
     command.append(path_string);
     command.append("'");
