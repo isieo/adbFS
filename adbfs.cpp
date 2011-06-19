@@ -74,7 +74,12 @@ queue<string> adb_shell(string command)
     string_replacer(command,"%","\\%");
     string_replacer(command,"=","\\=");
     string_replacer(command,"~","\\~");
-    actual_command = "adb shell ";
+    string_replacer(command,"/[0;0m","");
+    string_replacer(command,"/[1;32m","");
+    string_replacer(command,"/[1;34m","");
+    string_replacer(command,"/[1;36m","");
+ 
+    actual_command = "adb shell busybox ";
     actual_command.append(command);
     //actual_command.append("'");
 
@@ -149,23 +154,23 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         output_chunk.erase( output_chunk.begin());
     }
     /*
-    stat -t Explained:
-    file name (%n)
-    total size (%s)
-    number of blocks (%b)
-    raw mode in hex (%f)
-    UID of owner (%u)
-    GID of file (%g)
-    device number in hex (%D)
-    inode number (%i)
-    number of hard links (%h)
-    major devide type in hex (%t)
-    minor device type in hex (%T)
-    last access time as seconds since the Unix Epoch (%X)
-    last modification as seconds since the Unix Epoch (%Y)
-    last change as seconds since the Unix Epoch (%Z)
-    I/O block size (%o)
-    */
+       stat -t Explained:
+       file name (%n)
+       total size (%s)
+       number of blocks (%b)
+       raw mode in hex (%f)
+       UID of owner (%u)
+       GID of file (%g)
+       device number in hex (%D)
+       inode number (%i)
+       number of hard links (%h)
+       major devide type in hex (%t)
+       minor device type in hex (%T)
+       last access time as seconds since the Unix Epoch (%X)
+       last modification as seconds since the Unix Epoch (%Y)
+       last change as seconds since the Unix Epoch (%Z)
+       I/O block size (%o)
+       */
     //stbuf->st_dev = atoi(output_chunk[1].c_str());     /* ID of device containing file */
     stbuf->st_ino = atoi(output_chunk[7].c_str());     /* inode number */
     unsigned int raw_mode;
@@ -192,10 +197,10 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 
 
 static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t offset, struct fuse_file_info *fi)
+    off_t offset, struct fuse_file_info *fi)
 {
-	(void) offset;
-	(void) fi;
+    (void) offset;
+    (void) fi;
     string path_string;
     string local_path_string;
     path_string.assign(path);
@@ -207,7 +212,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     string_replacer(path_string," ","\\ ");
 
     queue<string> output;
-    string command = "ls -1a \"";
+    string command = "ls -1a --color=none \"";
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
@@ -221,7 +226,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     }
 
 
-	return 0;
+    return 0;
 }
 
 
@@ -258,7 +263,7 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
 }
 
 static int adb_read(const char *path, char *buf, size_t size, off_t offset,
-                      struct fuse_file_info *fi)
+    struct fuse_file_info *fi)
 {
     int fd;
     int res;
@@ -288,9 +293,9 @@ static int adb_write(const char *path, const char *buf, size_t size, off_t offse
     int res = pwrite(fd, buf, size, offset);
     //close(fd);
     //adb_push(local_path_string,path_string);
-	//adb_shell("sync");
+    //adb_shell("sync");
     if (res == -1)
-		res = -errno;
+        res = -errno;
     return res;
 }
 
@@ -303,22 +308,22 @@ static int adb_flush(const char *path, struct fuse_file_info *fi) {
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-	int flags = fi->flags;
+    int flags = fi->flags;
     int fd = fi->fh;
     cout << "flag is: "<< flags <<"\n";
-	if (filePendingWrite[fd]) {
+    if (filePendingWrite[fd]) {
         filePendingWrite[fd] = false;
         adb_push(local_path_string,path_string);
         adb_shell("sync");
-	}
-	return 0;
+    }
+    return 0;
 }
 
 static int adb_release(const char *path, struct fuse_file_info *fi) {
-	int fd = fi->fh;
+    int fd = fi->fh;
     filePendingWrite.erase(filePendingWrite.find(fd));
-	close(fd);
-	return 0;
+    close(fd);
+    return 0;
 }
 
 static int adb_access(const char *path, int mask) {
@@ -370,8 +375,8 @@ static int adb_truncate(const char *path, off_t size) {
     fileTruncated[path_string] = true;
 
     cout << "truncate[path=" << local_path_string << "][size=" << size << "]" << endl;
- 
-	return truncate(local_path_string.c_str(),size);
+
+    return truncate(local_path_string.c_str(),size);
 }
 
 static int adb_mknod(const char *path, mode_t mode, dev_t rdev) {
@@ -390,7 +395,7 @@ static int adb_mknod(const char *path, mode_t mode, dev_t rdev) {
 
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
 
-	return 0;
+    return 0;
 }
 
 static int adb_mkdir(const char *path, mode_t mode) {
@@ -407,7 +412,7 @@ static int adb_mkdir(const char *path, mode_t mode) {
     command.append(path_string);
     command.append("'");
     adb_shell(command);
-	return 0;
+    return 0;
 }
 
 static int adb_rename(const char *from, const char *to) {
@@ -485,5 +490,5 @@ int main(int argc, char *argv[])
     adbfs_oper.rename = adb_rename;
     adbfs_oper.rmdir = adb_rmdir;
     adbfs_oper.unlink = adb_unlink;
-	return fuse_main(argc, argv, &adbfs_oper, NULL);
+    return fuse_main(argc, argv, &adbfs_oper, NULL);
 }
