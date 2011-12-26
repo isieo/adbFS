@@ -6,5 +6,10 @@ TARGET=adbfs
 all:	$(TARGET)
 
 .PHONY: clean
+
 clean:
 	rm -rf *.o
+
+
+doc:
+	doxygen Doxyfile
