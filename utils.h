@@ -4,6 +4,9 @@
  *      Copyright (c) 2010-2011, Calvin Tee (collectskin.com)
  *      All rights reserved.
  *
+ *      2011-12-25 Updated by Sudarshan S. Chawathe (chaw@eip10.org).
+ *                 Comments and minor changes.
+ *
  *      Redistribution and use in source and binary forms, with or without
  *      modification, are permitted provided that the following conditions are
  *      met:
@@ -71,12 +74,23 @@ vector<string> make_array(string data){
     return result;
 }
 
-void string_replacer( string &source, const string find, string replace ) {
+/**
+   Replace all instances of string s1 with string s2 in the given
+   string s, which is modified in-place.
+
+   The work proceeds down the string and skips over the text
+   introduced by the replacment.
+
+   @param source the string s to be modified.
+   @param find the string s2, i.e., the pattern to be replaced.
+   @param replace the string s3, i.e., the replacement for s2.
+ */
+void string_replacer(string &source, const string find, const string replace) {
     size_t j = 0;
-	for ( ; (j = source.find( find,j)) != string::npos ; ) {
-		source.replace( j, find.length(), replace );
+    for ( ; (j = source.find(find,j)) != string::npos ; ) {
+	source.replace( j, find.length(), replace );
         j = j + replace.length();
-	}
+    }
 }
 
 int xtoi(const char* xs, unsigned int* result)
@@ -128,8 +142,14 @@ int xtoi(const char* xs, unsigned int* result)
  return 1;
 }
 
-queue<string> exec_command(string command)
+/**
+   Execute the given command string as a shell command.
+
+   @param command the string to be executed as a command.
+ */
+queue<string> exec_command(const string command)
 {
+    cout << "--*-- " << "exec_command: "  << command << "\n";
     queue<string> output;
     FILE *fp = popen(command.c_str(), "r" );
 
