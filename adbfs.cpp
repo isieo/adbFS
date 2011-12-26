@@ -259,7 +259,6 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     queue<string> output;
     string path_string;
     path_string.assign(path);
-    string_replacer(path_string," ","\\ ");
 
     // TODO caching?
     if (true || fileData.find(path_string) ==  fileData.end() 
@@ -340,8 +339,6 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-    //mkdir(local_path_string.c_str(),0755);
-    string_replacer(path_string," ","\\ ");
 
     queue<string> output;
     string command = "ls -1a --color=none \"";
@@ -371,9 +368,6 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-    // string_replacer(local_path_string," ","\\ ");
-    shell_escape_path(path_string);
-    shell_escape_path(local_path_string);
     cout << "-- " << path_string << " " << local_path_string << "\n";
     if (!fileTruncated[path_string]){
         queue<string> output;
@@ -383,14 +377,9 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
         cout << command<<"\n";
         output = adb_shell(command);
         vector<string> output_chunk = make_array(output.front());
-	for(unsigned int i = 0; i < output_chunk.size(); i++) {
-	  cout << "-- output_chunk: " << i << " " << output_chunk[i] << "\n";
-	}
-	cout << "-- output_chunk.size: " << output_chunk.size() << "\n";
         if (output_chunk.size() < 13){
             return -ENOENT;
         }
-
 	path_string.assign(path);
 	local_path_string.assign("/tmp/adbfs/");
 	string_replacer(path_string,"/","-");
@@ -429,7 +418,7 @@ static int adb_write(const char *path, const char *buf, size_t size, off_t offse
     path_string.assign(path);
     //local_path_string.assign("/tmp/adbfs/");
     //local_path_string.append(path_string);
-    string_replacer(local_path_string," ","\\ ");
+    shell_escape_path(local_path_string);
 
     int fd = fi->fh; //open(local_path_string.c_str(), O_CREAT|O_RDWR|O_TRUNC);
 
