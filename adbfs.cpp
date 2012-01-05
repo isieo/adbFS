@@ -1,7 +1,47 @@
+/**
+   @file
+   @author  Calvin Tee (collectskin.com)
+   @author  Sudarshan S. Chawathe (eip10.org)
+   @version 0.1
+
+   @section License
+
+   BSD; see comments in main source files for details.
+
+   @section Description
+
+   A FUSE-based filesystem using the Android ADB interface.
+
+   @mainpage
+
+   adbFS: A FUSE-based filesystem using the Android ADB interface.
+
+   Usage: To mount use
+
+   @code adbfs mountpoint @endcode
+
+   where mountpoint is a suitable directory. To unmount, use
+
+   @code fusermount -u mountpoint @endcode
+
+   as usual for FUSE.  
+
+   The above assumes you have a fairly standard Android development
+   setup, with adb in the path, busybox available on the Android
+   device, etc.  Everything is very lightly tested and a work in
+   progress.  Read the source and use with caution.
+   
+*/
+
 /*
  *      Software License Agreement (BSD License)
  *
  *      Copyright (c) 2010-2011, Calvin Tee (collectskin.com)
+ *
+ *      2011-12-25 Updated by Sudarshan S. Chawathe (chaw@eip10.org).
+ *                 Fixed some problems due to filenames with spaces.
+ *                 Added comments and miscellaneous small changes.
+ *
  *      All rights reserved.
  *
  *      Redistribution and use in source and binary forms, with or without
@@ -36,101 +76,182 @@
 
 using namespace std;
 
-queue<string> adb_push(string, string);
-queue<string> adb_pull(string, string);
-queue<string> adb_shell(string);
-queue<string> shell(string);
+void shell_escape_command(string&);
+void adb_shell_escape_command(string&);
+queue<string> adb_push(const string, const string);
+queue<string> adb_pull(const string, const string);
+queue<string> adb_shell(const string);
+queue<string> shell(const string);
+void clearTmpDir();
+
 map<string,fileCache> fileData;
 map<int,bool> filePendingWrite;
 map<string,bool> fileTruncated;
-void clearTmpDir();
 
-queue<string> shell(string command)
+/**
+   Return the result of executing the given command string, using
+   exec_command, on the local host.
+
+   @param command the command to execute.
+   @see exec_command.
+ */
+queue<string> shell(const string command)
 {
     string actual_command;
-    string_replacer(command,"\\","\\\\");
-    string_replacer(command,"'","\\'");
-    string_replacer(command,"`","\\`");
-    actual_command.append(command);
-
+    actual_command.assign(command);
+    shell_escape_command(actual_command);
     return exec_command(actual_command);
 }
 
+/**
+   Return the result of executing the given command on the Android
+   device using adb.
+
+   The given string command is prefixed with "adb shell busybox " to
+   yield the adb command line.
+
+   @param command the command to execute.
+   @see exec_command.
+   @todo perhaps avoid use of local shell to simplify escaping.
+ */
+queue<string> adb_shell(const string command)
+{
+    string actual_command;
+    actual_command.assign(command);
+    adb_shell_escape_command(actual_command);
+    actual_command.insert(0, "adb shell busybox ");
+    return exec_command(actual_command);
+}
+
+/**
+   Modify, in place, the given string by escaping characters that are
+   special to the shell.
+
+   @param cmd the string to be escaped.
+   @see adb_shell_escape_command.
+   @todo check/simplify escaping.
+ */
+void shell_escape_command(string& cmd)
+{
+    string_replacer(cmd,"\\","\\\\");
+    string_replacer(cmd,"'","\\'");
+    string_replacer(cmd,"`","\\`");
+}
+
+/**
+   Modify, in place, the given string by escaping characters that are
+   special to the adb shell.
+
+   @param cmd the string to be escaped.
+   @see shell_escape_command.
+   @todo check/simplify escaping.
+ */
+void adb_shell_escape_command(string& cmd)
+{
+    string_replacer(cmd,"\\","\\\\");
+    string_replacer(cmd,"(","\\(");
+    string_replacer(cmd,")","\\)");
+    string_replacer(cmd,"'","\\'");
+    string_replacer(cmd,"`","\\`");
+    string_replacer(cmd,"|","\\|");
+    string_replacer(cmd,"&","\\&");
+    string_replacer(cmd,";","\\;");
+    string_replacer(cmd,"<","\\<");
+    string_replacer(cmd,">","\\>");
+    string_replacer(cmd,"*","\\*");
+    string_replacer(cmd,"#","\\#");
+    string_replacer(cmd,"%","\\%");
+    string_replacer(cmd,"=","\\=");
+    string_replacer(cmd,"~","\\~");
+    string_replacer(cmd,"/[0;0m","");
+    string_replacer(cmd,"/[1;32m","");
+    string_replacer(cmd,"/[1;34m","");
+    string_replacer(cmd,"/[1;36m","");
+}
+
+/**
+   Modify, in place, the given path string by escaping special characters.
+   
+   @param path the string to modify.
+   @see shell_escape_command.
+   @todo check/simplify escaping.
+ */
+void shell_escape_path(string &path)
+{
+  string_replacer(path, " ", "\\ ");
+}
+
+/**
+   Recursively delete /tmp/adbfs on the local host and then recreate
+   it with 0755 permissions flags.
+   @todo Should probably use mkstemp or friends.
+ */
 void clearTmpDir(){
     shell("rm -rf /tmp/adbfs");
     mkdir("/tmp/adbfs/",0755);
 }
 
-
-queue<string> adb_shell(string command)
+/**
+   Set a given string to an adb push or pull command with given paths.
+   
+   @param cmd string to which the adb command is written.
+   @param push true for a push command, false for pull.
+   @param local_path path on local host for push or pull command.
+   @param remote_path path on remote device for push or pull command.
+   @see adb_pull.
+   @see adb_push.
+ */
+void adb_push_pull_cmd(string& cmd, const bool push, 
+		       const string local_path, const string remote_path)
 {
-    string actual_command;
-    string_replacer(command,"\\","\\\\");
-    string_replacer(command,"(","\\(");
-    string_replacer(command,")","\\)");
-    string_replacer(command,"'","\\'");
-    string_replacer(command,"`","\\`");
-    string_replacer(command,"|","\\|");
-    string_replacer(command,"&","\\&");
-    string_replacer(command,";","\\;");
-    string_replacer(command,"<","\\<");
-    string_replacer(command,">","\\>");
-    string_replacer(command,"*","\\*");
-    string_replacer(command,"#","\\#");
-    string_replacer(command,"%","\\%");
-    string_replacer(command,"=","\\=");
-    string_replacer(command,"~","\\~");
-    string_replacer(command,"/[0;0m","");
-    string_replacer(command,"/[1;32m","");
-    string_replacer(command,"/[1;34m","");
-    string_replacer(command,"/[1;36m","");
- 
-    actual_command = "adb shell busybox ";
-    actual_command.append(command);
-    //actual_command.append("'");
-
-    return exec_command(actual_command);
+    cmd.assign("adb ");
+    cmd.append((push ? "push '" : "pull '"));
+    cmd.append((push ? local_path : remote_path));
+    cmd.append("' '");
+    cmd.append((push ? remote_path : local_path));
+    cmd.append("'");
 }
 
-queue<string> adb_pull(string remote_source, string local_destination)
-{
-    string actual_command;
-    string_replacer(remote_source,"\\","\\\\");
-    string_replacer(remote_source,"'","\\'");
-    string_replacer(remote_source,"`","\\`");
-    string_replacer(local_destination,"\\","\\\\");
-    string_replacer(local_destination,"'","\\'");
-    string_replacer(local_destination,"`","\\`");
-    actual_command = "adb pull '";
-    actual_command.append(remote_source);
-    actual_command.append("' '");
-    actual_command.append(local_destination);
-    actual_command.append("'");
+/**
+   Copy (using adb pull) a file from the Android device to the local
+   host.
 
-    return exec_command(actual_command);
+   @param remote_source Android-side file path to copy.
+   @param local_destination local host-side destination path for copy.
+   @return result of the "adb pull ..." executed using exec_command.
+   @see adb_push.
+   @see adb_push_pull_cmd.
+   @todo perhaps avoid or simplify shell-escaping.
+   @bug problems with files with spaces in filenames (adb bug?)
+ */
+queue<string> adb_pull(const string remote_source,
+		       const string local_destination)
+{
+    string cmd;
+    adb_push_pull_cmd(cmd, false, local_destination, remote_source);
+    return exec_command(cmd);
 }
 
-queue<string> adb_push(string local_source, string remote_destination)
-{
-    string actual_command;
-    string_replacer(remote_destination,"\\","\\\\");
-    string_replacer(remote_destination,"'","\\'");
-    string_replacer(remote_destination,"`","\\`");
-    string_replacer(local_source,"\\","\\\\");
-    string_replacer(local_source,"'","\\'");
-    string_replacer(local_source,"`","\\`");
-    actual_command = "adb push '";
-    actual_command.append(local_source);
-    actual_command.append("' '");
-    actual_command.append(remote_destination);
-    actual_command.append("'");
+/**
+   Copy (using adb push) a file from the local host to the Android
+   device. Very similar to adb_pull.
 
-    cout << "Adb command : " <<actual_command << "\n";
-    return exec_command(actual_command);
+   @see adb_pull.
+   @see adb_push_pull_cmd.
+   @bug problems with files with spaces in filenames (adb bug?)
+ */
+queue<string> adb_push(const string local_source,
+		       const string remote_destination)
+{
+    string cmd;
+    adb_push_pull_cmd(cmd, true, local_source, remote_destination);
+    return exec_command(cmd);
 }
 
-
-
+/**
+   adbFS implementation of FUSE interface function fuse_operations.getattr.
+   @todo check shell escaping.
+ */
 static int adb_getattr(const char *path, struct stat *stbuf)
 {
     int res = 0;
@@ -138,9 +259,10 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     queue<string> output;
     string path_string;
     path_string.assign(path);
-    //string_replacer(path_string," ","\\ ");
 
-    if (true || fileData.find(path_string) ==  fileData.end() || fileData[path_string].timestamp + 30 > time(NULL)){
+    // TODO caching?
+    if (true || fileData.find(path_string) ==  fileData.end() 
+	|| fileData[path_string].timestamp + 30 > time(NULL)){
         string command = "stat -t \"";
         command.append(path_string);
         command.append("\"");
@@ -201,7 +323,10 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 }
 
 
-
+/**
+   adbFS implementation of FUSE interface function fuse_operations.readdir.
+   @todo check shell escaping.
+ */
 static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     off_t offset, struct fuse_file_info *fi)
 {
@@ -214,8 +339,6 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-    //mkdir(local_path_string.c_str(),0755);
-    string_replacer(path_string," ","\\ ");
 
     queue<string> output;
     string command = "ls -1a --color=none \"";
@@ -245,7 +368,7 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
-    //string_replacer(local_path_string," ","\\ ");
+    cout << "-- " << path_string << " " << local_path_string << "\n";
     if (!fileTruncated[path_string]){
         queue<string> output;
         string command = "stat -t \"";
@@ -257,7 +380,12 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
         if (output_chunk.size() < 13){
             return -ENOENT;
         }
-
+	path_string.assign(path);
+	local_path_string.assign("/tmp/adbfs/");
+	string_replacer(path_string,"/","-");
+	local_path_string.append(path_string);
+	shell_escape_path(local_path_string);
+	path_string.assign(path);
         adb_pull(path_string,local_path_string);
     }else{
         fileTruncated[path_string] = false;
@@ -290,7 +418,7 @@ static int adb_write(const char *path, const char *buf, size_t size, off_t offse
     path_string.assign(path);
     //local_path_string.assign("/tmp/adbfs/");
     //local_path_string.append(path_string);
-    //string_replacer(local_path_string," ","\\ ");
+    shell_escape_path(local_path_string);
 
     int fd = fi->fh; //open(local_path_string.c_str(), O_CREAT|O_RDWR|O_TRUNC);
 
@@ -474,8 +602,17 @@ static int adb_unlink(const char *path) {
     return 0;
 }
 
+/**
+   Main struct for FUSE interface.
+ */
 static struct fuse_operations adbfs_oper;
 
+/**
+   Set up the fuse_operations struct adbfs_oper using above adb_*
+   functions and then call fuse_main to manage things.
+
+   @see fuse_main in fuse.h.
+ */
 int main(int argc, char *argv[])
 {
     clearTmpDir();
@@ -483,7 +620,6 @@ int main(int argc, char *argv[])
     adbfs_oper.readdir= adb_readdir;
     adbfs_oper.getattr= adb_getattr;
     adbfs_oper.access= adb_access;
-    adbfs_oper.open= adb_open;
     adbfs_oper.open= adb_open;
     adbfs_oper.flush = adb_flush;
     adbfs_oper.release = adb_release;
