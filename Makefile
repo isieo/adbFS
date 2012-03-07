@@ -14,7 +14,7 @@ $(TARGET): adbfs.o
 .PHONY: clean
 
 clean:
-	rm -rf *.o
+	rm -rf *.o html/ latex/ $(TARGET)
 
 doc:
 	doxygen Doxyfile
