@@ -56,21 +56,25 @@ struct fileCache{
     queue<string> statOutput;
 };
 
-queue<string> exec_command(string);
-vector<string> make_array(string);
-void string_replacer(string&,const string,string);
+queue<string> exec_command(const string&);
+vector<string> make_array(const string&);
 
-vector<string> make_array(string data){
+void string_replacer(string&, const string&, const string&);
+
+vector<string> make_array(const string& data){
     vector<string> result;
+    if (data.size() < 1) return result;
     string delimiters = " ";
     string::size_type lastPos = data.find_first_not_of(delimiters, 0);
     string::size_type pos     = data.find_first_of(delimiters, lastPos);
-
     while (string::npos != pos || string::npos != lastPos)
     {
         result.push_back(data.substr(lastPos, pos - lastPos));
         lastPos = data.find_first_not_of(delimiters, pos);
-        pos = data.find_first_of(delimiters, lastPos);
+        if (lastPos != string::npos)
+            pos = data.find_first_of(delimiters, lastPos);                
+        else
+            break;
     }
     return result;
 }
@@ -86,7 +90,7 @@ vector<string> make_array(string data){
    @param find the string s2, i.e., the pattern to be replaced.
    @param replace the string s3, i.e., the replacement for s2.
  */
-void string_replacer(string &source, const string find, const string replace) {
+void string_replacer(string &source, const string& find, const string& replace) {
     size_t j = 0;
     for ( ; (j = source.find(find,j)) != string::npos ; ) {
 	source.replace( j, find.length(), replace );
@@ -148,7 +152,7 @@ int xtoi(const char* xs, unsigned int* result)
 
    @param command the string to be executed as a command.
  */
-queue<string> exec_command(const string command)
+queue<string> exec_command(const string& command)
 {
     cout << "--*-- " << "exec_command: "  << command << "\n";
     queue<string> output;

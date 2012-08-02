@@ -74,14 +74,31 @@
 #define FUSE_USE_VERSION 26
 #include "utils.h"
 
+#include <execinfo.h>
+#include <signal.h>
+
+void handler(int sig) {
+  void *array[10];
+  size_t size;
+
+  // get void*'s for all entries on the stack
+  size = backtrace(array, 10);
+
+  // print out all the frames to stderr
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  backtrace_symbols_fd(array, size, 2);
+  exit(1);
+}
+
+
 using namespace std;
 
 void shell_escape_command(string&);
 void adb_shell_escape_command(string&);
-queue<string> adb_push(const string, const string);
-queue<string> adb_pull(const string, const string);
-queue<string> adb_shell(const string);
-queue<string> shell(const string);
+queue<string> adb_push(const string&, const string&);
+queue<string> adb_pull(const string&, const string&);
+queue<string> adb_shell(const string&);
+queue<string> shell(const string&);
 void clearTmpDir();
 
 map<string,fileCache> fileData;
@@ -95,7 +112,7 @@ map<string,bool> fileTruncated;
    @param command the command to execute.
    @see exec_command.
  */
-queue<string> shell(const string command)
+queue<string> shell(const string& command)
 {
     string actual_command;
     actual_command.assign(command);
@@ -114,12 +131,12 @@ queue<string> shell(const string command)
    @see exec_command.
    @todo perhaps avoid use of local shell to simplify escaping.
  */
-queue<string> adb_shell(const string command)
+queue<string> adb_shell(const string& command)
 {
     string actual_command;
     actual_command.assign(command);
     adb_shell_escape_command(actual_command);
-    actual_command.insert(0, "adb shell busybox ");
+    actual_command.insert(0, "adb shell ");
     return exec_command(actual_command);
 }
 
@@ -202,7 +219,7 @@ void clearTmpDir(){
    @see adb_push.
  */
 void adb_push_pull_cmd(string& cmd, const bool push, 
-		       const string local_path, const string remote_path)
+		       const string& local_path, const string& remote_path)
 {
     cmd.assign("adb ");
     cmd.append((push ? "push '" : "pull '"));
@@ -224,8 +241,8 @@ void adb_push_pull_cmd(string& cmd, const bool push,
    @todo perhaps avoid or simplify shell-escaping.
    @bug problems with files with spaces in filenames (adb bug?)
  */
-queue<string> adb_pull(const string remote_source,
-		       const string local_destination)
+queue<string> adb_pull(const string& remote_source,
+		       const string& local_destination)
 {
     string cmd;
     adb_push_pull_cmd(cmd, false, local_destination, remote_source);
@@ -240,8 +257,8 @@ queue<string> adb_pull(const string remote_source,
    @see adb_push_pull_cmd.
    @bug problems with files with spaces in filenames (adb bug?)
  */
-queue<string> adb_push(const string local_source,
-		       const string remote_destination)
+queue<string> adb_push(const string& local_source,
+		       const string& remote_destination)
 {
     string cmd;
     adb_push_pull_cmd(cmd, true, local_source, remote_destination);
@@ -252,6 +269,34 @@ queue<string> adb_push(const string local_source,
    adbFS implementation of FUSE interface function fuse_operations.getattr.
    @todo check shell escaping.
  */
+
+
+
+int strmode_to_rawmode(const string& str) {
+    int fmode = 0;
+    if (str[0] == 'd') fmode += 040000;
+    else fmode += 0100000;
+   
+    if (str[1] == 'r') fmode += 0400;
+    if (str[2] == 'w') fmode += 0200;
+    if (str[3] == 'x') fmode += 0100;
+
+    if (str[4] == 'r') fmode += 040;
+    if (str[5] == 'w') fmode += 020;
+    if (str[6] == 'x') fmode += 010;
+    
+    if (str[7] == 'r') fmode += 04;
+    if (str[8] == 'w') fmode += 02;
+    if (str[9] == 'x') fmode += 01;
+
+    return fmode;
+
+        // In octal,
+        //     // 40XXX is folder, 100xxx is file
+        //         // xxx is regular mode e.g. 755 = -rwxr-xr-x
+        //
+
+}
 static int adb_getattr(const char *path, struct stat *stbuf)
 {
     int res = 0;
@@ -262,23 +307,23 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 
     // TODO caching?
     if (true || fileData.find(path_string) ==  fileData.end() 
-	|| fileData[path_string].timestamp + 30 > time(NULL)){
-        string command = "stat -t \"";
+	|| fileData[path_string].timestamp + 30 > time(NULL)) {
+        string command = "ls -ladn \"";
         command.append(path_string);
         command.append("\"");
         cout << command<<"\n";
         output = adb_shell(command);
         fileData[path_string].statOutput = output;
         fileData[path_string].timestamp = time(NULL);
-    }else{
+    } else{
         output = fileData[path_string].statOutput;
         cout << "from cache " << output.front() <<"\n";
     }
     vector<string> output_chunk = make_array(output.front());
-    if (output_chunk.size() < 13){
+    if (output_chunk[0][0] == '/'){
         return -ENOENT;
     }
-    while (output_chunk.size() > 15){
+    while (output_chunk.size() > 7){
         output_chunk.erase( output_chunk.begin());
     }
     /*
@@ -299,25 +344,51 @@ static int adb_getattr(const char *path, struct stat *stbuf)
        last change as seconds since the Unix Epoch (%Z)
        I/O block size (%o)
        */
+    // 
+    // ls -lad explained
+    // -rw-rw-r-- root     sdcard_rw   763362 2012-06-22 02:16 fajlot.html
+    //
     //stbuf->st_dev = atoi(output_chunk[1].c_str());     /* ID of device containing file */
-    stbuf->st_ino = atoi(output_chunk[7].c_str());     /* inode number */
-    unsigned int raw_mode;
-    xtoi(output_chunk[3].c_str(),&raw_mode);
-    stbuf->st_mode = raw_mode | 0700;    /* protection */
+    //
+    // In octal,
+    // 40XXX is folder, 100xxx is file
+    // xxx is regular mode e.g. 755 = rwxr-xr-x
+    //
+
+    stbuf->st_ino = 1; // atoi(output_chunk[7].c_str());     /* inode number */
+    //stbuf->st_mode = raw_mode | 0700;    /* protection */
+    stbuf->st_mode = strmode_to_rawmode(output_chunk[0]);
+
     stbuf->st_nlink = 1;   /* number of hard links */
-    stbuf->st_uid = atoi(output_chunk[4].c_str());     /* user ID of owner */
-    stbuf->st_gid = atoi(output_chunk[5].c_str());     /* group ID of owner */
+    stbuf->st_uid = atoi(output_chunk[1].c_str());     /* user ID of owner */
+    stbuf->st_gid = atoi(output_chunk[2].c_str());     /* group ID of owner */
 
-    unsigned int device_id;
-    xtoi(output_chunk[6].c_str(),&device_id);
-    stbuf->st_rdev = device_id;    // device ID (if special file)
+    //unsigned int device_id;
+    //xtoi(output_chunk[6].c_str(),&device_id);
+    //stbuf->st_rdev = device_id;    // device ID (if special file)
 
-    stbuf->st_size = atoi(output_chunk[1].c_str());    /* total size, in bytes */
-    stbuf->st_blksize = atoi(output_chunk[14].c_str()); /* blocksize for filesystem I/O */
-    stbuf->st_blocks = atoi(output_chunk[2].c_str());  /* number of blocks allocated */
-    stbuf->st_atime = atol(output_chunk[11].c_str());   /* time of last access */
-    stbuf->st_mtime = atol(output_chunk[12].c_str());   /* time of last modification */
-    stbuf->st_ctime = atol(output_chunk[13].c_str());   /* time of last status change */
+    stbuf->st_rdev = 801; // regular fucking file or directory
+
+    if (output_chunk[0][0] != 'd')
+        stbuf->st_size = atoi(output_chunk[3].c_str());    /* total size, in bytes */
+    else 
+        stbuf->st_size = 4096; // single fuking directory
+
+    stbuf->st_blksize = 0; // TODO: THIS IS SMELLY
+
+    //stbuf->st_blksize = atoi(output_chunk[14].c_str()); /* blocksize for filesystem I/O */
+    
+    stbuf->st_blocks = 1;
+
+    //stbuf->st_blocks = atoi(output_chunk[2].c_str());  /* number of blocks allocated */
+    
+    long now = time(0);
+    stbuf->st_atime = now;   /* time of last access */
+    //stbuf->st_atime = atol(output_chunk[11].c_str());   /* time of last access */
+    stbuf->st_mtime = now;   /* time of last modification */
+    //stbuf->st_mtime = atol(output_chunk[12].c_str());   /* time of last modification */
+    stbuf->st_ctime = now;   /* time of last status change */
+    //stbuf->st_ctime = atol(output_chunk[13].c_str());   /* time of last status change */
 
     return res;
 }
@@ -341,15 +412,16 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     path_string.assign(path);
 
     queue<string> output;
-    string command = "ls -1a --color=none \"";
+    string command = "ls \"";
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
+    if (!output.size()) return 0;
     vector<string> output_chunk = make_array(output.front());
-    if (output_chunk.size() >6){
+    if (output_chunk.size() > 3 && output.size() < 2){
         return -ENOENT;
     }
-    while (output.size() > 0){
+    while (output.size() > 0) {
         filler(buf, output.front().c_str(), NULL, 0);
         output.pop();
     }
@@ -371,23 +443,23 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
     cout << "-- " << path_string << " " << local_path_string << "\n";
     if (!fileTruncated[path_string]){
         queue<string> output;
-        string command = "stat -t \"";
+        string command = "ls -ladn \"";
         command.append(path_string);
         command.append("\"");
         cout << command<<"\n";
         output = adb_shell(command);
         vector<string> output_chunk = make_array(output.front());
-        if (output_chunk.size() < 13){
+        if (output_chunk[0][0] == '/') {
             return -ENOENT;
         }
-	path_string.assign(path);
-	local_path_string.assign("/tmp/adbfs/");
-	string_replacer(path_string,"/","-");
-	local_path_string.append(path_string);
-	shell_escape_path(local_path_string);
-	path_string.assign(path);
+        path_string.assign(path);
+        local_path_string.assign("/tmp/adbfs/");
+        string_replacer(path_string,"/","-");
+        local_path_string.append(path_string);
+        shell_escape_path(local_path_string);
+        path_string.assign(path);
         adb_pull(path_string,local_path_string);
-    }else{
+    } else {
         fileTruncated[path_string] = false;
     }
 
@@ -496,13 +568,13 @@ static int adb_truncate(const char *path, off_t size) {
     path_string.assign(path);
 
     queue<string> output;
-    string command = "stat -t \"";
+    string command = "ls -ladn \"";
     command.append(path_string);
     command.append("\"");
     cout << command<<"\n";
     output = adb_shell(command);
     vector<string> output_chunk = make_array(output.front());
-    if (output_chunk.size() < 13){
+    if (output_chunk[0][0] == '/'){
         adb_pull(path_string,local_path_string);
     }
 
@@ -641,6 +713,7 @@ static struct fuse_operations adbfs_oper;
  */
 int main(int argc, char *argv[])
 {
+    signal(SIGSEGV, handler);   // install our handler
     clearTmpDir();
     memset(&adbfs_oper, sizeof(adbfs_oper), 0);
     adbfs_oper.readdir= adb_readdir;
