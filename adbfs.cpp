@@ -299,32 +299,32 @@ int strmode_to_rawmode(const string& str) {
 }
 static int adb_getattr(const char *path, struct stat *stbuf)
 {
+
     int res = 0;
     memset(stbuf, 0, sizeof(struct stat));
     queue<string> output;
     string path_string;
     path_string.assign(path);
 
-    // TODO caching?
-    if (true || fileData.find(path_string) ==  fileData.end() 
-	|| fileData[path_string].timestamp + 30 > time(NULL)) {
+    // TODO /caching?
+    //
+    vector<string> output_chunk;
+    if (fileData.find(path_string) ==  fileData.end() 
+	|| fileData[path_string].timestamp + 30 < time(NULL)) {
         string command = "ls -ladn \"";
         command.append(path_string);
         command.append("\"");
-        cout << command<<"\n";
         output = adb_shell(command);
-        fileData[path_string].statOutput = output;
+        output_chunk = make_array(output.front());
+        fileData[path_string].statOutput = output_chunk;
         fileData[path_string].timestamp = time(NULL);
     } else{
-        output = fileData[path_string].statOutput;
-        cout << "from cache " << output.front() <<"\n";
+        output_chunk = fileData[path_string].statOutput;
+        cout << "from cache " << path << "\n";
     }
-    vector<string> output_chunk = make_array(output.front());
+    //vector<string> output_chunk = make_array(output.front());
     if (output_chunk[0][0] == '/'){
         return -ENOENT;
-    }
-    while (output_chunk.size() > 7){
-        output_chunk.erase( output_chunk.begin());
     }
     /*
        stat -t Explained:
@@ -369,27 +369,49 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 
     stbuf->st_rdev = 801; // regular fucking file or directory
 
-    if (output_chunk[0][0] != 'd')
+    if (output_chunk[0][0] == '-')
         stbuf->st_size = atoi(output_chunk[3].c_str());    /* total size, in bytes */
     else 
         stbuf->st_size = 4096; // single fuking directory
 
     stbuf->st_blksize = 0; // TODO: THIS IS SMELLY
-
-    //stbuf->st_blksize = atoi(output_chunk[14].c_str()); /* blocksize for filesystem I/O */
-    
     stbuf->st_blocks = 1;
 
-    //stbuf->st_blocks = atoi(output_chunk[2].c_str());  /* number of blocks allocated */
+    // Process date and time
+    int iDate =  output_chunk[0][0] == '-' ? 4 
+               : output_chunk[0][0] == 'c' ? 5 
+               : 3;
+
+    //for (int k = 0; k < output_chunk.size(); ++k) cout << output_chunk[k] << " ";    
+    //cout << endl;
     
-    long now = time(0);
+
+    vector<string> ymd = make_array(output_chunk[iDate], "-");
+    vector<string> hm = make_array(output_chunk[iDate + 1], ":");
+
+
+    //for (int k = 0; k < ymd.size(); ++k) cout << ymd[k] << " ";
+    //cout << endl;
+    //for (int k = 0; k <  hm.size(); ++k) cout <<  hm[k] << " ";
+    //cout << endl;
+    struct tm ftime;
+    ftime.tm_year = atoi(ymd[0].c_str()) - 1900;
+    ftime.tm_mon  = atoi(ymd[1].c_str());
+    ftime.tm_mday = atoi(ymd[2].c_str());
+    ftime.tm_hour = atoi(hm[0].c_str());
+    ftime.tm_min  = atoi(hm[1].c_str());
+    ftime.tm_sec  = 0;
+    time_t now = mktime(&ftime);
+    //cout << "after mktime" << endl;
+
+    //long now = time(0);
+
     stbuf->st_atime = now;   /* time of last access */
     //stbuf->st_atime = atol(output_chunk[11].c_str());   /* time of last access */
     stbuf->st_mtime = now;   /* time of last modification */
     //stbuf->st_mtime = atol(output_chunk[12].c_str());   /* time of last modification */
     stbuf->st_ctime = now;   /* time of last status change */
     //stbuf->st_ctime = atol(output_chunk[13].c_str());   /* time of last status change */
-
     return res;
 }
 
@@ -412,7 +434,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     path_string.assign(path);
 
     queue<string> output;
-    string command = "ls \"";
+    string command = "ls -lan \"";
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
@@ -422,8 +444,18 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         return -ENOENT;
     }
     while (output.size() > 0) {
-        filler(buf, output.front().c_str(), NULL, 0);
+        const string& fname_l = output.front().substr(55);
+        const string& fname_n = fname_l.substr(0, fname_l.find(" -> "));
+        filler(buf, fname_n.c_str(), NULL, 0);
+        const string& path_string_c = path_string 
+            + (path_string == "/" ? "" : "/") + fname_n;
+
+        cout << "caching " << path_string_c << "=" << output.front() <<  endl;
+        fileData[path_string_c].statOutput = make_array(output.front());
+        fileData[path_string_c].timestamp = time(NULL);
+        cout << "cached " << endl;
         output.pop();
+
     }
 
 

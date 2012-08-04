@@ -53,18 +53,18 @@ using namespace std;
 
 struct fileCache{
     time_t timestamp;
-    queue<string> statOutput;
+    vector<string> statOutput;
 };
 
 queue<string> exec_command(const string&);
-vector<string> make_array(const string&);
+vector<string> make_array(const string&, const string&);
 
 void string_replacer(string&, const string&, const string&);
 
-vector<string> make_array(const string& data){
+vector<string> make_array(const string& data, const string& delimiters = " "){
     vector<string> result;
     if (data.size() < 1) return result;
-    string delimiters = " ";
+    //string delimiters = " ";
     string::size_type lastPos = data.find_first_not_of(delimiters, 0);
     string::size_type pos     = data.find_first_of(delimiters, lastPos);
     while (string::npos != pos || string::npos != lastPos)
