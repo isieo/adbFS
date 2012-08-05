@@ -4,26 +4,26 @@ Instructions:
 =============
 
 
-- Clone the repository 
+Clone the repository 
 
     git clone git://github.com/spion/adbfs-rootless.git
     
-- You will need libfuse-dev. On ubuntu
+You will need libfuse-dev. On ubuntu
     
     sudo apt-get install libfuse-dev
 
-- Build
+Build
 
     make
 
-- Copy the binary adbfs to <path-to-android-sdk>/platform-tools directory. 
+Copy the binary adbfs to <path-to-android-sdk>/platform-tools directory. 
 If platform-tools is in your $PATH you can skip this step.
 
-- Create a mount point if needed (e.g. in your home directory)
+Create a mount point if needed (e.g. in your home directory)
 
     mkdir ~/droid
     
--  You can now mount your device from the platform-tools dir:
+ You can now mount your device from the platform-tools dir:
 
     ./adbfs ~/droid
 
