@@ -274,6 +274,8 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         output = fileData[path_string].statOutput;
         cout << "from cache " << output.front() <<"\n";
     }
+    if (output.empty())
+        return -EIO;
     vector<string> output_chunk = make_array(output.front());
     if (output_chunk.size() < 13){
         return -ENOENT;
@@ -345,6 +347,8 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
+    if (output.empty())
+        return -EIO;
     vector<string> output_chunk = make_array(output.front());
     if (output_chunk.size() >6){
         return -ENOENT;
@@ -376,6 +380,8 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
         command.append("\"");
         cout << command<<"\n";
         output = adb_shell(command);
+        if (output.empty())
+            return -EIO;
         vector<string> output_chunk = make_array(output.front());
         if (output_chunk.size() < 13){
             return -ENOENT;
@@ -501,6 +507,8 @@ static int adb_truncate(const char *path, off_t size) {
     command.append("\"");
     cout << command<<"\n";
     output = adb_shell(command);
+    if (output.empty())
+        return -EIO;
     vector<string> output_chunk = make_array(output.front());
     if (output_chunk.size() < 13){
         adb_pull(path_string,local_path_string);
