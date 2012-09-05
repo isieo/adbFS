@@ -22,10 +22,14 @@ If platform-tools is in your $PATH you can skip this step.
 Create a mount point if needed (e.g. in your home directory)
 
     mkdir ~/droid
-    
- You can now mount your device from the platform-tools dir:
+
+Until i fix the startup bug, before mounting you need to run adb once
+to start the daemon.
+
+    adb shell ls
+
+You can now mount your device from the platform-tools dir:
 
     ./adbfs ~/droid
-
 
 
