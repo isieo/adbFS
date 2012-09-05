@@ -202,7 +202,7 @@ void adb_shell_escape_command(string& cmd)
  */
 void shell_escape_path(string &path)
 {
-  string_replacer(path, " ", "\\ ");
+  //string_replacer(path, " ", "\\ ");
 }
 
 /**
