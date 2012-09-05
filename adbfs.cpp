@@ -102,6 +102,13 @@ queue<string> shell(const string&);
 void clearTmpDir();
 
 map<string,fileCache> fileData;
+void invalidateCache(const string& path) {
+    cout << "invalidate cache " << path << endl;    
+    map<string, fileCache>::iterator it = fileData.find(path);
+    if (it != fileData.end()) 
+        fileData.erase(it);
+}
+
 map<int,bool> filePendingWrite;
 map<string,bool> fileTruncated;
 
@@ -262,7 +269,9 @@ queue<string> adb_push(const string& local_source,
 {
     string cmd;
     adb_push_pull_cmd(cmd, true, local_source, remote_destination);
-    return exec_command(cmd);
+    queue<string> res = exec_command(cmd);
+    invalidateCache(remote_destination);
+    return res;
 }
 
 /**
@@ -297,6 +306,9 @@ int strmode_to_rawmode(const string& str) {
         //
 
 }
+
+
+
 static int adb_getattr(const char *path, struct stat *stbuf)
 {
 
@@ -549,6 +561,7 @@ static int adb_flush(const char *path, struct fuse_file_info *fi) {
     int flags = fi->flags;
     int fd = fi->fh;
     cout << "flag is: "<< flags <<"\n";
+    invalidateCache(path_string);
     if (filePendingWrite[fd]) {
         filePendingWrite[fd] = false;
         adb_push(local_path_string,path_string);
@@ -612,6 +625,8 @@ static int adb_truncate(const char *path, off_t size) {
 
     fileTruncated[path_string] = true;
 
+    invalidateCache(path_string);
+    
     cout << "truncate[path=" << local_path_string << "][size=" << size << "]" << endl;
 
     return truncate(local_path_string.c_str(),size);
@@ -631,7 +646,7 @@ static int adb_mknod(const char *path, mode_t mode, dev_t rdev) {
     adb_push(local_path_string,path_string);
     adb_shell("sync");
 
-    fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
+    invalidateCache(path_string);
 
     return 0;
 }
@@ -650,6 +665,7 @@ static int adb_mkdir(const char *path, mode_t mode) {
     command.append(path_string);
     command.append("'");
     adb_shell(command);
+    invalidateCache(path_string);
     return 0;
 }
 
@@ -665,6 +681,8 @@ static int adb_rename(const char *from, const char *to) {
     command.append("'");
     cout << "Renaming " << from << " to " << to <<"\n";
     adb_shell(command);
+    invalidateCache(string(from));
+    invalidateCache(string(to));
     return 0;
 }
 
@@ -678,10 +696,11 @@ static int adb_rmdir(const char *path) {
     local_path_string.append(path_string);
     path_string.assign(path);
 
-    string command = "rmdir '";
+    string command = "rm -r '";
     command.append(path_string);
     command.append("'");
     adb_shell(command);
+    invalidateCache(path_string);
 
     //rmdir(local_path_string.c_str());
     return 0;
@@ -701,7 +720,7 @@ static int adb_unlink(const char *path) {
     command.append(path_string);
     command.append("'");
     adb_shell(command);
-
+    invalidateCache(path_string);
     unlink(local_path_string.c_str());
     return 0;
 }

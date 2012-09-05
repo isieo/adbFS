@@ -1,0 +1,4 @@
+make
+sudo killall -9 adbfs
+sudo umount /media/droid
+./adbfs $1 /media/droid
