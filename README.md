@@ -23,8 +23,8 @@ Create a mount point if needed (e.g. in your home directory)
 
     mkdir ~/droid
 
-Until i fix the startup bug, before mounting you need to run adb once
-to start the daemon.
+Before mounting you need to run adb once to make sure that the daemon
+is started (will be fixed eventually):
 
     adb shell ls
 
