@@ -428,6 +428,16 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 }
 
 
+size_t find_nth(int n, const string& substr, const string& corpus) {
+    size_t p = 0;
+    while (n--) {
+        if ((( p = corpus.find_first_of(substr, p) )) == string::npos) return string::npos;
+        p = corpus.find_first_not_of(substr, p); 
+    }   
+    return p;
+}
+
+
 /**
    adbFS implementation of FUSE interface function fuse_operations.readdir.
    @todo check shell escaping.
@@ -456,13 +466,14 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         return -ENOENT;
     }
     while (output.size() > 0) {
-        const string& fname_l = output.front().substr(55);
+        const string& fname_l_t = output.front().substr(54); 
+        const string& fname_l = fname_l_t.substr(find_nth(1, " ",fname_l_t));
         const string& fname_n = fname_l.substr(0, fname_l.find(" -> "));
         filler(buf, fname_n.c_str(), NULL, 0);
         const string& path_string_c = path_string 
             + (path_string == "/" ? "" : "/") + fname_n;
 
-        cout << "caching " << path_string_c << "=" << output.front() <<  endl;
+        cout << "caching " << path_string_c << " = " << output.front() <<  endl;
         fileData[path_string_c].statOutput = make_array(output.front());
         fileData[path_string_c].timestamp = time(NULL);
         cout << "cached " << endl;
