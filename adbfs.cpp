@@ -618,12 +618,25 @@ static int adb_readlink(const char *path, char *buf, size_t size)
        return -EINVAL;
 
     string res = output.front();
+    if (res[0] == '/') {
+        int pos = 0;
+        int depth = -1;
+        while (path[pos] != '\0') {
+            if (path[pos++] == '/') depth++;
+        }
+
+        res.erase(0, 1);
+        while (depth > 0) {
+            res.insert(0, "../");
+            depth--;
+        }
+    }
 
     size_t my_size = res.size();
-    if(my_size >= size)
+    if (my_size >= size)
        return -ENOSYS;
 
-    memcpy(buf, res.c_str(), my_size);
+    memcpy(buf, res.c_str(), my_size + 1);
     return 0;
 }
 
