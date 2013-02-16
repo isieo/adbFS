@@ -613,26 +613,38 @@ static int adb_unlink(const char *path) {
 static int adb_readlink(const char *path, char *buf, size_t size)
 {
     string path_string(path);
-    string_replacer(path_string,"'","\\'");
-    queue<string> output;
-    string command = "ls -l --color=none \"";
+    string_replacer(path_string, "'", "\\'");
+
+    string command = "readlink \"";
     command.append(path_string);
     command.append("\"");
+
+    queue<string> output;
     output = adb_shell(command);
+
     if(output.empty())
        return -EINVAL;
+
     string res = output.front();
-    size_t pos = res.find(" -> ");
-    if(pos == string::npos)
-       return -EINVAL;
-    pos+=4;
-    while(res[pos] == '/')
-       ++pos;
-    size_t my_size = res.size() - pos;
-    if(my_size >= size)
+    if (res[0] == '/') {
+        int pos = 0;
+        int depth = -1;
+        while (path[pos] != '\0') {
+            if (path[pos++] == '/') depth++;
+        }
+
+        res.erase(0, 1);
+        while (depth > 0) {
+            res.insert(0, "../");
+            depth--;
+        }
+    }
+
+    size_t my_size = res.size();
+    if (my_size >= size)
        return -ENOSYS;
-    //cout << res << endl << pStart <<endl;
-    memcpy(buf, res.c_str() + pos, my_size+1);
+
+    memcpy(buf, res.c_str(), my_size + 1);
     return 0;
 }
 
