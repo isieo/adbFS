@@ -512,9 +512,21 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     output = adb_shell(command);
     if (!output.size()) return 0;
     vector<string> output_chunk = make_array(output.front());
-    if (output_chunk.size() > 3 && output.size() < 2){
-        return -ENOENT;
-    }
+    /* The specific error messages we are looking for (from the android source)-
+       (in listdir) "opendir failed, strerror"
+       (in show_total_size) "stat failed on filename, strerror"
+       (in listfile_size) "lstat 'filename' failed: strerror"
+
+       Thus, we can abuse this a little and just make sure that the second
+       character is either "r" or "-", and assume it's an error otherwise.
+
+       It'd be really nice if we could actually take the strerrors and convert
+       them back to codes, but I fear that involves undoing localization.
+    */
+    if (output.front().length() < 3) return -ENOENT;
+    if (output.front().c_str()[1] != 'r' &&
+        output.front().c_str()[1] != '-') return -ENOENT;
+
     while (output.size() > 0) {
         const string& fname_l_t = output.front().substr(54); 
         const string& fname_l = fname_l_t.substr(find_nth(1, " ",fname_l_t));
