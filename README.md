@@ -34,4 +34,8 @@ You can now mount your device (also from the platform-tools dir):
 
     ./adbfs ~/droid
 
+# Known issues (TODO)
+
+* crashes if the adb daemon hasn't been started beforehand
+* doesn't show symbolic links properly.
 
