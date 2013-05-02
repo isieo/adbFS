@@ -458,7 +458,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     //cout << endl;
     struct tm ftime;
     ftime.tm_year = atoi(ymd[0].c_str()) - 1900;
-    ftime.tm_mon  = atoi(ymd[1].c_str());
+    ftime.tm_mon  = atoi(ymd[1].c_str()) - 1;
     ftime.tm_mday = atoi(ymd[2].c_str());
     ftime.tm_hour = atoi(hm[0].c_str());
     ftime.tm_min  = atoi(hm[1].c_str());
