@@ -804,6 +804,11 @@ static int adb_readlink(const char *path, char *buf, size_t size)
     string_replacer(path_string,"'","\\'");
     queue<string> output;
     string command = "ls -l \"";
+    int num_slashes, ii;
+    for (num_slashes = ii = 0; ii < strlen(path); ii++)
+	    if (path[ii] == '/')
+		    num_slashes++;
+    if (num_slashes >= 1) num_slashes--;
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
@@ -814,13 +819,21 @@ static int adb_readlink(const char *path, char *buf, size_t size)
     if(pos == string::npos)
        return -EINVAL;
     pos+=4;
-    while(res[pos] == '/')
-       ++pos;
-    size_t my_size = res.size() - pos;
+    size_t my_size = res.size();
+    buf[0] = 0;
+    if (res[pos] == '/') {
+	    while(res[pos] == '/')
+		    ++pos;
+	    my_size += 3 * num_slashes - pos;
+	    if(my_size >= size)
+		    return -ENOSYS;
+	    for (;num_slashes;num_slashes--) {
+		    strncat(buf,"../",size);
+	    }
+    }
     if(my_size >= size)
-       return -ENOSYS;
-    //cout << res << endl << pStart <<endl;
-    memcpy(buf, res.c_str() + pos, my_size+1);
+	    return -ENOSYS;
+    strncat(buf, res.c_str() + pos,size);
     return 0;
 }
 
