@@ -463,6 +463,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     ftime.tm_hour = atoi(hm[0].c_str());
     ftime.tm_min  = atoi(hm[1].c_str());
     ftime.tm_sec  = 0;
+    ftime.tm_isdst = -1;
     time_t now = mktime(&ftime);
     //cout << "after mktime" << endl;
 
