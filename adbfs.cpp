@@ -283,20 +283,39 @@ queue<string> adb_push(const string& local_source,
 
 int strmode_to_rawmode(const string& str) {
     int fmode = 0;
-    if (str[0] == 'd') fmode += 040000;
-    else fmode += 0100000;
+    switch (str[0]) {
+    case 's': fmode |= S_IFSOCK; break;
+    case 'l': fmode |= S_IFLNK; break;
+    case '-': fmode |= S_IFREG; break;
+    case 'd': fmode |= S_IFDIR; break;
+    case 'b': fmode |= S_IFBLK; break;
+    case 'c': fmode |= S_IFCHR; break;
+    case 'p': fmode |= S_IFIFO; break;
+    }
    
-    if (str[1] == 'r') fmode += 0400;
-    if (str[2] == 'w') fmode += 0200;
-    if (str[3] == 'x') fmode += 0100;
+    if (str[1] == 'r') fmode |= S_IRUSR;
+    if (str[2] == 'w') fmode |= S_IWUSR;
+    switch (str[3]) {
+    case 'x': fmode |= S_IXUSR; break;
+    case 's': fmode |= S_ISUID | S_IXUSR; break;
+    case 'S': fmode |= S_ISUID; break;
+    }
 
-    if (str[4] == 'r') fmode += 040;
-    if (str[5] == 'w') fmode += 020;
-    if (str[6] == 'x') fmode += 010;
+    if (str[4] == 'r') fmode |= S_IRGRP;
+    if (str[5] == 'w') fmode |= S_IWGRP;
+    switch (str[6]) {
+    case 'x': fmode |= S_IXGRP; break;
+    case 's': fmode |= S_ISGID | S_IXGRP; break;
+    case 'S': fmode |= S_ISGID; break;
+    }
     
-    if (str[7] == 'r') fmode += 04;
-    if (str[8] == 'w') fmode += 02;
-    if (str[9] == 'x') fmode += 01;
+    if (str[7] == 'r') fmode |= S_IROTH;
+    if (str[8] == 'w') fmode |= S_IWOTH;
+    switch (str[9]) {
+    case 'x': fmode |= S_IXOTH; break;
+    case 't': fmode |= S_ISVTX | S_IXOTH; break;
+    case 'T': fmode |= S_ISVTX; break;
+    }
 
     return fmode;
 
@@ -379,20 +398,35 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     //xtoi(output_chunk[6].c_str(),&device_id);
     //stbuf->st_rdev = device_id;    // device ID (if special file)
 
-    stbuf->st_rdev = 801; // regular fucking file or directory
+    int iDate;
 
-    if (output_chunk[0][0] == '-')
-        stbuf->st_size = atoi(output_chunk[3].c_str());    /* total size, in bytes */
-    else 
-        stbuf->st_size = 4096; // single fuking directory
+    switch (stbuf->st_mode & S_IFMT) {
+    case S_IFBLK:
+    case S_IFCHR:
+	    stbuf->st_rdev = atoi(output_chunk[3].c_str()) * 256 + atoi(output_chunk[4].c_str());
+	    stbuf->st_size = 0;
+	    iDate = 5;
+	    break;
+
+	    break;
+
+    case S_IFREG:
+	    stbuf->st_size = atoi(output_chunk[3].c_str());    /* total size, in bytes */
+	    iDate = 4;
+	    break;
+
+    default:
+    case S_IFSOCK:
+    case S_IFIFO:
+    case S_IFLNK:
+    case S_IFDIR:
+	    stbuf->st_size = 0;
+	    iDate = 3;
+	    break;
+    }
 
     stbuf->st_blksize = 0; // TODO: THIS IS SMELLY
     stbuf->st_blocks = 1;
-
-    // Process date and time
-    int iDate =  output_chunk[0][0] == '-' ? 4 
-               : output_chunk[0][0] == 'c' ? 5 
-               : 3;
 
     //for (int k = 0; k < output_chunk.size(); ++k) cout << output_chunk[k] << " ";    
     //cout << endl;
