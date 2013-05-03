@@ -76,6 +76,10 @@
 
 #include <execinfo.h>
 #include <signal.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <pwd.h>
+#include <grp.h>
 
 void handler(int sig) {
   void *array[10];
@@ -332,6 +336,8 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 {
 
     int res = 0;
+    struct passwd * foruid;
+    struct group * forgid;
     memset(stbuf, 0, sizeof(struct stat));
     queue<string> output;
     string path_string;
@@ -342,7 +348,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     vector<string> output_chunk;
     if (fileData.find(path_string) ==  fileData.end() 
 	|| fileData[path_string].timestamp + 30 < time(NULL)) {
-        string command = "ls -ladn \"";
+        string command = "ls -l -a -d \"";
         command.append(path_string);
         command.append("\"");
         output = adb_shell(command);
@@ -391,8 +397,18 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     stbuf->st_mode = strmode_to_rawmode(output_chunk[0]);
 
     stbuf->st_nlink = 1;   /* number of hard links */
-    stbuf->st_uid = atoi(output_chunk[1].c_str());     /* user ID of owner */
-    stbuf->st_gid = atoi(output_chunk[2].c_str());     /* group ID of owner */
+
+    foruid = getpwnam(output_chunk[1].c_str());
+    if (foruid)
+	    stbuf->st_uid = foruid->pw_uid;     /* user ID of owner */
+    else
+	    stbuf->st_uid = 98; /* 98 has been chosen (poorly) so that it doesn't map to anything */
+
+    forgid = getgrnam(output_chunk[2].c_str());
+    if (forgid)
+	    stbuf->st_gid = forgid->gr_gid;     /* group ID of owner */
+    else
+	    stbuf->st_gid = 98;
 
     //unsigned int device_id;
     //xtoi(output_chunk[6].c_str(),&device_id);
@@ -490,7 +506,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     path_string.assign(path);
 
     queue<string> output;
-    string command = "ls -lan \"";
+    string command = "ls -l -a \"";
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
@@ -532,7 +548,7 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
     cout << "-- " << path_string << " " << local_path_string << "\n";
     if (!fileTruncated[path_string]){
         queue<string> output;
-        string command = "ls -ladn \"";
+        string command = "ls -l -a -d \"";
         command.append(path_string);
         command.append("\"");
         cout << command<<"\n";
@@ -658,7 +674,7 @@ static int adb_truncate(const char *path, off_t size) {
     path_string.assign(path);
 
     queue<string> output;
-    string command = "ls -ladn \"";
+    string command = "ls -l -a -d \"";
     command.append(path_string);
     command.append("\"");
     cout << command<<"\n";
@@ -775,7 +791,7 @@ static int adb_readlink(const char *path, char *buf, size_t size)
     string path_string(path);
     string_replacer(path_string,"'","\\'");
     queue<string> output;
-    string command = "ls -l --color=none \"";
+    string command = "ls -l \"";
     command.append(path_string);
     command.append("\"");
     output = adb_shell(command);
