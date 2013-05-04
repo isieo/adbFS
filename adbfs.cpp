@@ -352,6 +352,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         command.append(path_string);
         command.append("\"");
         output = adb_shell(command);
+        if (output.empty()) return -EAGAIN; /* no phone */
         output_chunk = make_array(output.front());
         fileData[path_string].statOutput = output_chunk;
         fileData[path_string].timestamp = time(NULL);
@@ -512,6 +513,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     command.append("\"");
     output = adb_shell(command);
     if (!output.size()) return 0;
+    /* cannot tell between "no phone" and "empty directory" */
     vector<string> output_chunk = make_array(output.front());
     /* The specific error messages we are looking for (from the android source)-
        (in listdir) "opendir failed, strerror"
