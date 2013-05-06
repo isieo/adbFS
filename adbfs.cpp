@@ -103,8 +103,8 @@ queue<string> adb_push(const string&, const string&);
 queue<string> adb_pull(const string&, const string&);
 queue<string> adb_shell(const string&);
 queue<string> shell(const string&);
-void clearTmpDir();
 
+string tempDirPath;
 map<string,fileCache> fileData;
 void invalidateCache(const string& path) {
     cout << "invalidate cache " << path << endl;    
@@ -210,13 +210,22 @@ void shell_escape_path(string &path)
 }
 
 /**
-   Recursively delete /tmp/adbfs on the local host and then recreate
-   it with 0755 permissions flags.
-   @todo Should probably use mkstemp or friends.
+   Make a secure temporary directory for each mounted filesystem. Use with
+   ANDROID_SERIAL environment variable to mount multiple phones at once.
+
+   Also set up a callback to cleanup after ourselves on clean shutdown.
  */
-void clearTmpDir(){
-    shell("rm -rf /tmp/adbfs");
-    mkdir("/tmp/adbfs/",0755);
+void cleanupTmpDir(void) {
+    string command = "rm -rf ";
+    command.append(tempDirPath);
+    shell(command);
+}
+
+void makeTmpDir(void) {
+    char adbfsTemplate[]="/tmp/adbfs-XXXXXX";
+    tempDirPath.assign(mkdtemp(adbfsTemplate));
+    tempDirPath.append("/");
+    atexit(&cleanupTmpDir);
 }
 
 /**
@@ -502,7 +511,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     string path_string;
     string local_path_string;
     path_string.assign(path);
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -556,7 +565,7 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
     string path_string;
     string local_path_string;
     path_string.assign(path);
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -573,7 +582,7 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
             return -ENOENT;
         }
         path_string.assign(path);
-        local_path_string.assign("/tmp/adbfs/");
+        local_path_string = tempDirPath;
         string_replacer(path_string,"/","-");
         local_path_string.append(path_string);
         shell_escape_path(local_path_string);
@@ -608,8 +617,6 @@ static int adb_write(const char *path, const char *buf, size_t size, off_t offse
     string path_string;
     string local_path_string;
     path_string.assign(path);
-    //local_path_string.assign("/tmp/adbfs/");
-    //local_path_string.append(path_string);
     shell_escape_path(local_path_string);
 
     int fd = fi->fh; //open(local_path_string.c_str(), O_CREAT|O_RDWR|O_TRUNC);
@@ -630,7 +637,7 @@ static int adb_flush(const char *path, struct fuse_file_info *fi) {
     string path_string;
     string local_path_string;
     path_string.assign(path);
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -663,7 +670,7 @@ static int adb_utimens(const char *path, const struct timespec ts[2]) {
     string local_path_string;
     path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -683,7 +690,7 @@ static int adb_truncate(const char *path, off_t size) {
     string local_path_string;
     path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -712,7 +719,7 @@ static int adb_mknod(const char *path, mode_t mode, dev_t rdev) {
     string path_string;
     string local_path_string;
     path_string.assign(path);
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -732,7 +739,7 @@ static int adb_mkdir(const char *path, mode_t mode) {
     string local_path_string;
     path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -746,7 +753,7 @@ static int adb_mkdir(const char *path, mode_t mode) {
 }
 
 static int adb_rename(const char *from, const char *to) {
-    string local_from_string,local_to_string ="/tmp/adbfs/";
+    string local_from_string,local_to_string = tempDirPath;
 
     local_from_string.append(from);
     local_to_string.append(to);
@@ -767,7 +774,7 @@ static int adb_rmdir(const char *path) {
     string local_path_string;
     path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -787,7 +794,7 @@ static int adb_unlink(const char *path) {
     string local_path_string;
     path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    local_path_string.assign("/tmp/adbfs/");
+    local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
@@ -854,7 +861,7 @@ static struct fuse_operations adbfs_oper;
 int main(int argc, char *argv[])
 {
     signal(SIGSEGV, handler);   // install our handler
-    clearTmpDir();
+    makeTmpDir();
     memset(&adbfs_oper, sizeof(adbfs_oper), 0);
     adbfs_oper.readdir= adb_readdir;
     adbfs_oper.getattr= adb_getattr;
