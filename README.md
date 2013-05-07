@@ -16,7 +16,7 @@ Build
 
     make
 
-Copy the binary adbfs to <path-to-android-sdk>/platform-tools directory. 
+Copy the binary adbfs to the `android-sdk/platform-tools` directory. 
 If platform-tools is in your $PATH you can skip this step.
 
 Create a mount point if needed (e.g. in your home directory)
@@ -37,5 +37,4 @@ You can now mount your device (also from the platform-tools dir):
 # Known issues (TODO)
 
 * crashes if the adb daemon hasn't been started beforehand
-* doesn't show symbolic links properly.
 
