@@ -53,7 +53,7 @@ using namespace std;
 
 struct fileCache{
     time_t timestamp;
-    vector<string> statOutput;
+    string statOutput;
 };
 
 queue<string> exec_command(const string&);
