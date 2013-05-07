@@ -363,13 +363,12 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         output = adb_shell(command);
         if (output.empty()) return -EAGAIN; /* no phone */
         output_chunk = make_array(output.front());
-        fileData[path_string].statOutput = output_chunk;
+        fileData[path_string].statOutput = output.front();
         fileData[path_string].timestamp = time(NULL);
     } else{
-        output_chunk = fileData[path_string].statOutput;
+        output_chunk = make_array(fileData[path_string].statOutput);
         cout << "from cache " << path << "\n";
     }
-    //vector<string> output_chunk = make_array(output.front());
     if (output_chunk[0][0] == '/'){
         return -ENOENT;
     }
@@ -548,7 +547,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
             + (path_string == "/" ? "" : "/") + fname_n;
 
         cout << "caching " << path_string_c << " = " << output.front() <<  endl;
-        fileData[path_string_c].statOutput = make_array(output.front());
+        fileData[path_string_c].statOutput = output.front(); 
         fileData[path_string_c].timestamp = time(NULL);
         cout << "cached " << endl;
         output.pop();
@@ -813,18 +812,35 @@ static int adb_readlink(const char *path, char *buf, size_t size)
     string path_string(path);
     string_replacer(path_string,"'","\\'");
     queue<string> output;
-    string command = "ls -l \"";
+
+    string res;
+
+    // get the number of slashes in the path
     int num_slashes, ii;
     for (num_slashes = ii = 0; ii < strlen(path); ii++)
-	    if (path[ii] == '/')
-		    num_slashes++;
+        if (path[ii] == '/')
+            num_slashes++;
     if (num_slashes >= 1) num_slashes--;
-    command.append(path_string);
-    command.append("\"");
-    output = adb_shell(command);
-    if(output.empty())
-       return -EINVAL;
-    string res = output.front();
+
+    if (fileData.find(path_string) ==  fileData.end() 
+	|| fileData[path_string].timestamp + 30 < time(NULL)) {
+        string command = "ls -l -a -d \"";
+        command.append(path_string);
+        command.append("\"");
+        output = adb_shell(command);
+        if (output.empty()) 
+            return -EINVAL; 
+        res = output.front();
+        fileData[path_string].statOutput = output.front();
+        fileData[path_string].timestamp = time(NULL);
+    } else{
+        res = fileData[path_string].statOutput;
+        cout << "from cache " << path << "\n";
+    }
+    if (res[0] == '/'){
+        return -ENOENT;
+    }
+    cout << "adb_readlink " << res << endl;
     size_t pos = res.find(" -> ");
     if(pos == string::npos)
        return -EINVAL;
