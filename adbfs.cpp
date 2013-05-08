@@ -895,5 +895,6 @@ int main(int argc, char *argv[])
     adbfs_oper.rmdir = adb_rmdir;
     adbfs_oper.unlink = adb_unlink;
     adbfs_oper.readlink = adb_readlink;
+    adb_shell("ls");
     return fuse_main(argc, argv, &adbfs_oper, NULL);
 }

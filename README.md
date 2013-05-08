@@ -23,18 +23,8 @@ Create a mount point if needed (e.g. in your home directory)
 
     mkdir ~/droid
 
-Before mounting you need to run adb once to make sure that the daemon
-is started (will be fixed eventually).
-
-From the sdk's platform-tools dir:
-
-    ./adb shell ls
-
 You can now mount your device (also from the platform-tools dir):
 
     ./adbfs ~/droid
 
-# Known issues (TODO)
-
-* crashes if the adb daemon hasn't been started beforehand
-
+Have fun!
