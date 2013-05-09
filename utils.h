@@ -59,7 +59,7 @@ struct fileCache{
 queue<string> exec_command(const string&);
 vector<string> make_array(const string&, const string&);
 
-void string_replacer(string&, const string&, const string&);
+string& string_replacer(string&, const string&, const string&);
 
 vector<string> make_array(const string& data, const string& delimiters = " "){
     vector<string> result;
@@ -90,12 +90,13 @@ vector<string> make_array(const string& data, const string& delimiters = " "){
    @param find the string s2, i.e., the pattern to be replaced.
    @param replace the string s3, i.e., the replacement for s2.
  */
-void string_replacer(string &source, const string& find, const string& replace) {
+string& string_replacer(string &source, const string& find, const string& replace) {
     size_t j = 0;
     for ( ; (j = source.find(find,j)) != string::npos ; ) {
 	source.replace( j, find.length(), replace );
         j = j + replace.length();
     }
+    return source;
 }
 
 int xtoi(const char* xs, unsigned int* result)

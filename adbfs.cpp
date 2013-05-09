@@ -1,4 +1,4 @@
-/**
+/*
    @file
    @author  Calvin Tee (collectskin.com)
    @author  Sudarshan S. Chawathe (eip10.org)
@@ -127,7 +127,7 @@ queue<string> shell(const string& command)
 {
     string actual_command;
     actual_command.assign(command);
-    shell_escape_command(actual_command);
+    //shell_escape_command(actual_command);
     return exec_command(actual_command);
 }
 
@@ -146,7 +146,7 @@ queue<string> adb_shell(const string& command)
 {
     string actual_command;
     actual_command.assign(command);
-    adb_shell_escape_command(actual_command);
+    //adb_shell_escape_command(actual_command);
     actual_command.insert(0, "adb shell ");
     return exec_command(actual_command);
 }
@@ -206,7 +206,7 @@ void adb_shell_escape_command(string& cmd)
  */
 void shell_escape_path(string &path)
 {
-  //string_replacer(path, " ", "\\ ");
+  string_replacer(path, "'", "'\\''");
 }
 
 /**
@@ -351,15 +351,15 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     queue<string> output;
     string path_string;
     path_string.assign(path);
-
+    shell_escape_path(path_string);
     // TODO /caching?
     //
     vector<string> output_chunk;
     if (fileData.find(path_string) ==  fileData.end() 
 	|| fileData[path_string].timestamp + 30 < time(NULL)) {
-        string command = "ls -l -a -d \"";
+        string command = "ls -l -a -d '";
         command.append(path_string);
-        command.append("\"");
+        command.append("'");
         output = adb_shell(command);
         if (output.empty()) return -EAGAIN; /* no phone */
         output_chunk = make_array(output.front());
@@ -515,10 +515,12 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     local_path_string.append(path_string);
     path_string.assign(path);
 
+    shell_escape_path(path_string);
+
     queue<string> output;
-    string command = "ls -l -a \"";
+    string command = "ls -l -a '";
     command.append(path_string);
-    command.append("\"");
+    command.append("'");
     output = adb_shell(command);
     if (!output.size()) return 0;
     /* cannot tell between "no phone" and "empty directory" */
@@ -567,13 +569,19 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
     local_path_string = tempDirPath;
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
+
+    string filehandle_path = local_path_string;
+
     path_string.assign(path);
-    cout << "-- " << path_string << " " << local_path_string << "\n";
+    shell_escape_path(path_string);
+    shell_escape_path(local_path_string);
+
+    cout << "-- adb_open --" << path_string << " " << local_path_string << "\n";
     if (!fileTruncated[path_string]){
         queue<string> output;
-        string command = "ls -l -a -d \"";
+        string command = "ls -l -a -d '";
         command.append(path_string);
-        command.append("\"");
+        command.append("'");
         cout << command<<"\n";
         output = adb_shell(command);
         vector<string> output_chunk = make_array(output.front());
@@ -584,14 +592,15 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
         local_path_string = tempDirPath;
         string_replacer(path_string,"/","-");
         local_path_string.append(path_string);
-        shell_escape_path(local_path_string);
         path_string.assign(path);
+        shell_escape_path(path_string);
+        shell_escape_path(local_path_string);
         adb_pull(path_string,local_path_string);
     } else {
         fileTruncated[path_string] = false;
     }
 
-    fi->fh = open(local_path_string.c_str(), fi->flags);
+    fi->fh = open(filehandle_path.c_str(), fi->flags);
 
     return 0;
 }
@@ -613,10 +622,10 @@ static int adb_read(const char *path, char *buf, size_t size, off_t offset,
 }
 
 static int adb_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
-    string path_string;
-    string local_path_string;
-    path_string.assign(path);
-    shell_escape_path(local_path_string);
+    //string path_string;
+    //string local_path_string;
+    //path_string.assign(path);
+    //shell_escape_path(path_string);
 
     int fd = fi->fh; //open(local_path_string.c_str(), O_CREAT|O_RDWR|O_TRUNC);
 
@@ -640,13 +649,17 @@ static int adb_flush(const char *path, struct fuse_file_info *fi) {
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
+
+    shell_escape_path(path_string);
+    shell_escape_path(local_path_string);
+
     int flags = fi->flags;
     int fd = fi->fh;
     cout << "flag is: "<< flags <<"\n";
     invalidateCache(path_string);
     if (filePendingWrite[fd]) {
         filePendingWrite[fd] = false;
-        adb_push(local_path_string,path_string);
+        adb_push(local_path_string, path_string);
         adb_shell("sync");
     }
     return 0;
@@ -674,10 +687,13 @@ static int adb_utimens(const char *path, const struct timespec ts[2]) {
     local_path_string.append(path_string);
     path_string.assign(path);
 
+    shell_escape_path(path_string);
+    shell_escape_path(local_path_string);
+
     queue<string> output;
-    string command = "touch \"";
+    string command = "touch '";
     command.append(path_string);
-    command.append("\"");
+    command.append("'");
     cout << command<<"\n";
     adb_shell(command);
 
@@ -693,12 +709,15 @@ static int adb_truncate(const char *path, off_t size) {
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
+    shell_escape_path(path_string);
+    shell_escape_path(local_path_string);
+
 
     queue<string> output;
-    string command = "ls -l -a -d \"";
+    string command = "ls -l -a -d '";
     command.append(path_string);
-    command.append("\"");
-    cout << command<<"\n";
+    command.append("'");
+    cout << command << "\n";
     output = adb_shell(command);
     vector<string> output_chunk = make_array(output.front());
     if (output_chunk[0][0] == '/'){
@@ -725,6 +744,10 @@ static int adb_mknod(const char *path, mode_t mode, dev_t rdev) {
 
     cout << "mknod for " << local_path_string << "\n";
     mknod(local_path_string.c_str(),mode, rdev);
+
+    shell_escape_path(path_string);
+    shell_escape_path(local_path_string);
+
     adb_push(local_path_string,path_string);
     adb_shell("sync");
 
@@ -742,6 +765,9 @@ static int adb_mkdir(const char *path, mode_t mode) {
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
+
+    shell_escape_path(path_string);
+
     string command;
     command.assign("mkdir '");
     command.append(path_string);
@@ -754,12 +780,23 @@ static int adb_mkdir(const char *path, mode_t mode) {
 static int adb_rename(const char *from, const char *to) {
     string local_from_string,local_to_string = tempDirPath;
 
+    string from_string = string(from), to_string = string(to);
+
+
     local_from_string.append(from);
     local_to_string.append(to);
+
+    shell_escape_path(local_from_string);
+    shell_escape_path(local_to_string);
+
+    shell_escape_path(from_string);
+    shell_escape_path(to_string);
+
+
     string command = "mv '";
-    command.append(from);
+    command.append(from_string);
     command.append("' '");
-    command.append(to);
+    command.append(to_string);
     command.append("'");
     cout << "Renaming " << from << " to " << to <<"\n";
     adb_shell(command);
@@ -777,6 +814,10 @@ static int adb_rmdir(const char *path) {
     string_replacer(path_string,"/","-");
     local_path_string.append(path_string);
     path_string.assign(path);
+
+    shell_escape_path(path_string);
+    shell_escape_path(local_path_string);
+
 
     string command = "rm -r '";
     command.append(path_string);
@@ -798,6 +839,9 @@ static int adb_unlink(const char *path) {
     local_path_string.append(path_string);
     path_string.assign(path);
 
+    shell_escape_path(path_string);
+    shell_escape_path(local_path_string);
+
     string command = "rm '";
     command.append(path_string);
     command.append("'");
@@ -810,7 +854,8 @@ static int adb_unlink(const char *path) {
 static int adb_readlink(const char *path, char *buf, size_t size)
 {
     string path_string(path);
-    string_replacer(path_string,"'","\\'");
+    shell_escape_path(path_string);
+
     queue<string> output;
 
     string res;
@@ -824,9 +869,9 @@ static int adb_readlink(const char *path, char *buf, size_t size)
 
     if (fileData.find(path_string) ==  fileData.end() 
 	|| fileData[path_string].timestamp + 30 < time(NULL)) {
-        string command = "ls -l -a -d \"";
+        string command = "ls -l -a -d '";
         command.append(path_string);
-        command.append("\"");
+        command.append("'");
         output = adb_shell(command);
         if (output.empty()) 
             return -EINVAL; 
