@@ -56,14 +56,13 @@ error: device offline
 Solution: make sure that 
 
 1. your android-sdk-tools are up to date. Newer versions
-   of Android also require newer versions of adb. 
-   
-   For more info, see [this stackoverflow post][error-device-offline]
+   of Android also require newer versions of adb. For more info, see 
+   [this stackoverflow post][error-device-offline]
 
 2. you answer `Yes `when your phone asks whether it should allow the 
    computer with the specified RSA key to access the device.
 
-Then `sudo umount /media/mount/path` before trying again
+Then `killall -9 adb; sudo umount /media/mount/path` before trying again
 
 
 [enable-usb-debug]: http://www.droidviews.com/how-to-enable-developer-optionsusb-debugging-mode-on-devices-with-android-4-2-jelly-bean/
