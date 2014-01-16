@@ -3,9 +3,9 @@ This variant of adbfs workous even WITHOUT having root access (busybox) on your 
 Instructions:
 =============
 
-You will need libfuse-dev. On ubuntu
+You will need `libfuse-dev` and `adb`. On ubuntu
     
-    sudo apt-get install libfuse-dev
+    sudo apt-get install libfuse-dev android-tools-adb
 
 Clone the repository 
 
@@ -16,8 +16,9 @@ Build
 
     make
 
-Copy the binary adbfs to the `android-sdk/platform-tools` directory. 
-If platform-tools is in your $PATH you can skip this step.
+Optional: If you have a separate copy of android-sdk and would
+like to use that adb, copy the binary adbfs to the `android-sdk/platform-tools`
+directory. If platform-tools is in your $PATH you can skip this step.
 
 Create a mount point if needed (e.g. in your home directory)
 
