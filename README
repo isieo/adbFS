@@ -1,0 +1,7 @@
+Instructions:
+
+Install: Put the compiled binary into your <path-to-android-sdk>/tools directory
+
+Use: $ adbfs <Mountpoint>
+
+
