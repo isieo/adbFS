@@ -541,7 +541,9 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         output.front().c_str()[1] != '-') return -ENOENT;
 
     while (output.size() > 0) {
-        const string& fname_l_t = output.front().substr(54); 
+        // Start of filename = `ls -la` time separator + 3
+        size_t nameStart = output.front().find_first_of(":") + 3;
+        const string& fname_l_t = output.front().substr(nameStart);
         const string& fname_l = fname_l_t.substr(find_nth(1, " ",fname_l_t));
         const string& fname_n = fname_l.substr(0, fname_l.find(" -> "));
         filler(buf, fname_n.c_str(), NULL, 0);
