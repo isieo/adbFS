@@ -87,8 +87,8 @@ vector<string> make_array(string data) {
  */
 void string_replacer(string &source, const string find, const string replace) {
     size_t j = 0;
-    for (j = source.find(find, j); j != string::npos; ) {
-        source.replace(j, find.length(), replace);
+    for ( ; (j = source.find(find,j)) != string::npos ; ) {
+	source.replace( j, find.length(), replace );
         j = j + replace.length();
     }
 }
