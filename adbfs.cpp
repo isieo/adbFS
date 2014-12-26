@@ -339,7 +339,28 @@ int strmode_to_rawmode(const string& str) {
 
 }
 
+// Heuristic to determine whether the output of ls produced
+// an actual file
+bool check_exists(const string& file) {
+  /* The specific error messages we are looking for (from the android source)-
+     (in listdir) "opendir failed, strerror"
+     (in show_total_size) "stat failed on filename, strerror"
+     (in listfile_size) "lstat 'filename' failed: strerror"
 
+     Thus, we can abuse this a little and just make sure that the second
+     character is either "r" or "-", and assume it's an error otherwise.
+
+     To eliminate cases such as /rfile: no such file or directory from
+     producing false-positives, we also check whether the first character
+     is a slash
+
+     It'd be really nice if we could actually take the strerrors and convert
+     them back to codes, but I fear that involves undoing localization.
+  */
+  if (file[0] == '/') return false;
+  if (file[1] != 'r' && file[1] != '-') return false;
+  return true;
+}
 
 static int adb_getattr(const char *path, struct stat *stbuf)
 {
@@ -369,30 +390,13 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         output_chunk = make_array(fileData[path_string].statOutput);
         cout << "from cache " << path << "\n";
     }
-    if (output_chunk[0][0] == '/'){
+    if (!check_exists(output_chunk[0])) {
         return -ENOENT;
     }
-    /*
-       stat -t Explained:
-       file name (%n)
-       total size (%s)
-       number of blocks (%b)
-       raw mode in hex (%f)
-       UID of owner (%u)
-       GID of file (%g)
-       device number in hex (%D)
-       inode number (%i)
-       number of hard links (%h)
-       major devide type in hex (%t)
-       minor device type in hex (%T)
-       last access time as seconds since the Unix Epoch (%X)
-       last modification as seconds since the Unix Epoch (%Y)
-       last change as seconds since the Unix Epoch (%Z)
-       I/O block size (%o)
-       */
-    // 
+
+    //
     // ls -lad explained
-    // -rw-rw-r-- root     sdcard_rw   763362 2012-06-22 02:16 fajlot.html
+    // -rw-rw-r-- root     sdcard_rw   763362 2012-06-22 02:16 file.html
     //
     //stbuf->st_dev = atoi(output_chunk[1].c_str());     /* ID of device containing file */
     //
@@ -525,22 +529,15 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     if (!output.size()) return 0;
     /* cannot tell between "no phone" and "empty directory" */
     vector<string> output_chunk = make_array(output.front());
-    /* The specific error messages we are looking for (from the android source)-
-       (in listdir) "opendir failed, strerror"
-       (in show_total_size) "stat failed on filename, strerror"
-       (in listfile_size) "lstat 'filename' failed: strerror"
 
-       Thus, we can abuse this a little and just make sure that the second
-       character is either "r" or "-", and assume it's an error otherwise.
-
-       It'd be really nice if we could actually take the strerrors and convert
-       them back to codes, but I fear that involves undoing localization.
-    */
     if (output.front().length() < 3) return -ENOENT;
-    if (output.front().c_str()[1] != 'r' &&
-        output.front().c_str()[1] != '-') return -ENOENT;
-
+    if (!check_exists(output.front())) {
+        return -ENOENT;
+    }
     while (output.size() > 0) {
+      // todo: remove deliberate segfault
+      volatile int *p = reinterpret_cast<volatile int*>(0);
+      *p = 0x1337D00D;
         // Start of filename = `ls -la` time separator + 3
         size_t nameStart = output.front().find_first_of(":") + 3;
         const string& fname_l_t = output.front().substr(nameStart);
@@ -587,8 +584,8 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
         cout << command<<"\n";
         output = adb_shell(command);
         vector<string> output_chunk = make_array(output.front());
-        if (output_chunk[0][0] == '/') {
-            return -ENOENT;
+        if (!check_exists(output_chunk[0])) {
+          return -ENOENT;
         }
         path_string.assign(path);
         local_path_string = tempDirPath;
@@ -884,8 +881,8 @@ static int adb_readlink(const char *path, char *buf, size_t size)
         res = fileData[path_string].statOutput;
         cout << "from cache " << path << "\n";
     }
-    if (res[0] == '/'){
-        return -ENOENT;
+    if (!check_exists(res)) {
+      return -ENOENT;
     }
     cout << "adb_readlink " << res << endl;
     size_t pos = res.find(" -> ");
