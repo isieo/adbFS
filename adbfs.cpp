@@ -535,9 +535,6 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         return -ENOENT;
     }
     while (output.size() > 0) {
-      // todo: remove deliberate segfault
-      volatile int *p = reinterpret_cast<volatile int*>(0);
-      *p = 0x1337D00D;
         // Start of filename = `ls -la` time separator + 3
         size_t nameStart = output.front().find_first_of(":") + 3;
         const string& fname_l_t = output.front().substr(nameStart);
