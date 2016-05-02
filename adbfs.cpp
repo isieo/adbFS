@@ -24,13 +24,13 @@
 
    @code fusermount -u mountpoint @endcode
 
-   as usual for FUSE.  
+   as usual for FUSE.
 
    The above assumes you have a fairly standard Android development
    setup, with adb in the path, busybox available on the Android
    device, etc.  Everything is very lightly tested and a work in
    progress.  Read the source and use with caution.
-   
+
 */
 
 /*
@@ -47,7 +47,7 @@
  *      Redistribution and use in source and binary forms, with or without
  *      modification, are permitted provided that the following conditions are
  *      met:
- *      
+ *
  *      * Redistributions of source code must retain the above copyright
  *        notice, this list of conditions and the following disclaimer.
  *      * Redistributions in binary form must reproduce the above
@@ -57,7 +57,7 @@
  *      * Neither the name of the  nor the names of its
  *        contributors may be used to endorse or promote products derived from
  *        this software without specific prior written permission.
- *      
+ *
  *      THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  *      "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  *      LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -70,7 +70,7 @@
  *      (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *      OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
- 
+
 #define FUSE_USE_VERSION 26
 #include "utils.h"
 
@@ -107,9 +107,9 @@ queue<string> shell(const string&);
 string tempDirPath;
 map<string,fileCache> fileData;
 void invalidateCache(const string& path) {
-    cout << "invalidate cache " << path << endl;    
+    cout << "invalidate cache " << path << endl;
     map<string, fileCache>::iterator it = fileData.find(path);
-    if (it != fileData.end()) 
+    if (it != fileData.end())
         fileData.erase(it);
 }
 
@@ -147,7 +147,8 @@ queue<string> adb_shell(const string& command)
     string actual_command;
     actual_command.assign(command);
     //adb_shell_escape_command(actual_command);
-    actual_command.insert(0, "adb shell ");
+    actual_command.insert(0, "adb shell \"");
+    actual_command.append("\"");
     return exec_command(actual_command);
 }
 
@@ -199,7 +200,7 @@ void adb_shell_escape_command(string& cmd)
 
 /**
    Modify, in place, the given path string by escaping special characters.
-   
+
    @param path the string to modify.
    @see shell_escape_command.
    @todo check/simplify escaping.
@@ -207,6 +208,7 @@ void adb_shell_escape_command(string& cmd)
 void shell_escape_path(string &path)
 {
   string_replacer(path, "'", "'\\''");
+  string_replacer(path, "\"", "\\\"");
 }
 
 /**
@@ -230,7 +232,7 @@ void makeTmpDir(void) {
 
 /**
    Set a given string to an adb push or pull command with given paths.
-   
+
    @param cmd string to which the adb command is written.
    @param push true for a push command, false for pull.
    @param local_path path on local host for push or pull command.
@@ -238,7 +240,7 @@ void makeTmpDir(void) {
    @see adb_pull.
    @see adb_push.
  */
-void adb_push_pull_cmd(string& cmd, const bool push, 
+void adb_push_pull_cmd(string& cmd, const bool push,
 		       const string& local_path, const string& remote_path)
 {
     cmd.assign("adb ");
@@ -305,7 +307,7 @@ int strmode_to_rawmode(const string& str) {
     case 'c': fmode |= S_IFCHR; break;
     case 'p': fmode |= S_IFIFO; break;
     }
-   
+
     if (str[1] == 'r') fmode |= S_IRUSR;
     if (str[2] == 'w') fmode |= S_IWUSR;
     switch (str[3]) {
@@ -321,7 +323,7 @@ int strmode_to_rawmode(const string& str) {
     case 's': fmode |= S_ISGID | S_IXGRP; break;
     case 'S': fmode |= S_ISGID; break;
     }
-    
+
     if (str[7] == 'r') fmode |= S_IROTH;
     if (str[8] == 'w') fmode |= S_IWOTH;
     switch (str[9]) {
@@ -376,7 +378,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     // TODO /caching?
     //
     vector<string> output_chunk;
-    if (fileData.find(path_string) ==  fileData.end() 
+    if (fileData.find(path_string) ==  fileData.end()
 	|| fileData[path_string].timestamp + 30 < time(NULL)) {
         string command = "ls -l -a -d '";
         command.append(path_string);
@@ -457,9 +459,9 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     stbuf->st_blksize = 0; // TODO: THIS IS SMELLY
     stbuf->st_blocks = 1;
 
-    //for (int k = 0; k < output_chunk.size(); ++k) cout << output_chunk[k] << " ";    
+    //for (int k = 0; k < output_chunk.size(); ++k) cout << output_chunk[k] << " ";
     //cout << endl;
-    
+
 
     vector<string> ymd = make_array(output_chunk[iDate], "-");
     vector<string> hm = make_array(output_chunk[iDate + 1], ":");
@@ -496,8 +498,8 @@ size_t find_nth(int n, const string& substr, const string& corpus) {
     size_t p = 0;
     while (n--) {
         if ((( p = corpus.find_first_of(substr, p) )) == string::npos) return string::npos;
-        p = corpus.find_first_not_of(substr, p); 
-    }   
+        p = corpus.find_first_not_of(substr, p);
+    }
     return p;
 }
 
@@ -541,11 +543,11 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         const string& fname_l = fname_l_t.substr(find_nth(1, " ",fname_l_t));
         const string& fname_n = fname_l.substr(0, fname_l.find(" -> "));
         filler(buf, fname_n.c_str(), NULL, 0);
-        const string& path_string_c = path_string 
+        const string& path_string_c = path_string
             + (path_string == "/" ? "" : "/") + fname_n;
 
         cout << "caching " << path_string_c << " = " << output.front() <<  endl;
-        fileData[path_string_c].statOutput = output.front(); 
+        fileData[path_string_c].statOutput = output.front();
         fileData[path_string_c].timestamp = time(NULL);
         cout << "cached " << endl;
         output.pop();
@@ -723,7 +725,7 @@ static int adb_truncate(const char *path, off_t size) {
     fileTruncated[path_string] = true;
 
     invalidateCache(path_string);
-    
+
     cout << "truncate[path=" << local_path_string << "][size=" << size << "]" << endl;
 
     return truncate(local_path_string.c_str(),size);
@@ -863,14 +865,14 @@ static int adb_readlink(const char *path, char *buf, size_t size)
             num_slashes++;
     if (num_slashes >= 1) num_slashes--;
 
-    if (fileData.find(path_string) ==  fileData.end() 
+    if (fileData.find(path_string) ==  fileData.end()
 	|| fileData[path_string].timestamp + 30 < time(NULL)) {
         string command = "ls -l -a -d '";
         command.append(path_string);
         command.append("'");
         output = adb_shell(command);
-        if (output.empty()) 
-            return -EINVAL; 
+        if (output.empty())
+            return -EINVAL;
         res = output.front();
         fileData[path_string].statOutput = output.front();
         fileData[path_string].timestamp = time(NULL);
