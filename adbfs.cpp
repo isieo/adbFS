@@ -147,7 +147,8 @@ queue<string> adb_shell(const string& command)
     string actual_command;
     actual_command.assign(command);
     //adb_shell_escape_command(actual_command);
-    actual_command.insert(0, "adb shell ");
+    actual_command.insert(0, "adb shell \"");
+    actual_command.append("\"");
     return exec_command(actual_command);
 }
 
@@ -207,6 +208,7 @@ void adb_shell_escape_command(string& cmd)
 void shell_escape_path(string &path)
 {
   string_replacer(path, "'", "'\\''");
+  string_replacer(path, "\"", "\\\"");
 }
 
 /**
