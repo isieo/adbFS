@@ -135,7 +135,7 @@ queue<string> shell(const string& command)
    Return the result of executing the given command on the Android
    device using adb.
 
-   The given string command is prefixed with "adb shell busybox " to
+   The given string command is prefixed with "adb shell " to
    yield the adb command line.
 
    @param command the command to execute.
@@ -343,7 +343,7 @@ int strmode_to_rawmode(const string& str) {
 
 // Heuristic to determine whether the output of ls produced
 // an actual file
-bool check_exists(const string& file) {
+bool is_valid_ls_output(const string& file) {
   /* The specific error messages we are looking for (from the android source)-
      (in listdir) "opendir failed, strerror"
      (in show_total_size) "stat failed on filename, strerror"
@@ -385,14 +385,26 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         command.append("'");
         output = adb_shell(command);
         if (output.empty()) return -EAGAIN; /* no phone */
-        output_chunk = make_array(output.front());
-        fileData[path_string].statOutput = output.front();
+        // error format: "/sbin/healthd: Permission denied"
+        if (!output.front().compare(output.front().length() - 19, 19, ": Permission denied"))
+        {
+            fileData[path_string].statOutput.erase();
+        } else {
+            output_chunk = make_array(output.front());
+            fileData[path_string].statOutput = output.front();
+        }
         fileData[path_string].timestamp = time(NULL);
     } else{
         output_chunk = make_array(fileData[path_string].statOutput);
         cout << "from cache " << path << "\n";
     }
-    if (!check_exists(output_chunk[0])) {
+    if (fileData[path_string].statOutput.empty()) {
+        // return empty structure - file exists, but no info available
+        stbuf->st_mode = S_IFREG;
+        return res;
+    }
+
+    if(!is_valid_ls_output(output_chunk[0])) {
         return -ENOENT;
     }
 
@@ -528,30 +540,43 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     command.append(path_string);
     command.append("'");
     output = adb_shell(command);
-    if (!output.size()) return 0;
+
     /* cannot tell between "no phone" and "empty directory" */
-    vector<string> output_chunk = make_array(output.front());
-
-    if (output.front().length() < 3) return -ENOENT;
-    if (!check_exists(output.front())) {
-        return -ENOENT;
-    }
     while (output.size() > 0) {
-        // Start of filename = `ls -la` time separator + 3
-        size_t nameStart = output.front().find_first_of(":") + 3;
-        const string& fname_l_t = output.front().substr(nameStart);
-        const string& fname_l = fname_l_t.substr(find_nth(1, " ",fname_l_t));
-        const string& fname_n = fname_l.substr(0, fname_l.find(" -> "));
-        filler(buf, fname_n.c_str(), NULL, 0);
-        const string& path_string_c = path_string 
-            + (path_string == "/" ? "" : "/") + fname_n;
+    	// skip lines too short to process (should not happen)
+        if (output.front().length() < 3) continue;
+    	// we can get e.g. "permission denied" during listing, need to check every line separately
+        if (!is_valid_ls_output(output.front())) {
+            // error format: "lstat '//efs' failed: Permission denied"
+            if (output.front().compare(0, 7, "lstat '") ||
+                output.front().compare(output.front().length() - 27, 27, "' failed: Permission denied"))
+                continue;
 
-        cout << "caching " << path_string_c << " = " << output.front() <<  endl;
-        fileData[path_string_c].statOutput = output.front(); 
-        fileData[path_string_c].timestamp = time(NULL);
-        cout << "cached " << endl;
+            size_t nameStart = output.front().rfind("/") + 1;
+			const string& fname_l = output.front().substr(nameStart, output.front().find("' ") - nameStart);
+			filler(buf, fname_l.c_str(), NULL, 0);
+			const string& path_string_c = path_string
+				+ (path_string == "/" ? "" : "/") + fname_l;
+
+			cout << "caching " << path_string_c << " = " << output.front() <<  endl;
+			fileData[path_string_c].statOutput.erase();
+			fileData[path_string_c].timestamp = time(NULL);
+			cout << "cached " << endl;
+        } else {
+			// Start of filename = `ls -la` time separator + 4
+			size_t nameStart = output.front().find_first_of(":") + 4;
+			const string& fname_l = output.front().substr(nameStart);
+			const string fname_n = fname_l.substr(0, fname_l.find(" -> "));
+			filler(buf, fname_n.c_str(), NULL, 0);
+			const string path_string_c = path_string
+				+ (path_string == "/" ? "" : "/") + fname_n;
+
+			cout << "caching " << path_string_c << " = " << output.front() <<  endl;
+			fileData[path_string_c].statOutput = output.front();
+			fileData[path_string_c].timestamp = time(NULL);
+			cout << "cached " << endl;
+        }
         output.pop();
-
     }
 
 
@@ -583,7 +608,7 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
         cout << command<<"\n";
         output = adb_shell(command);
         vector<string> output_chunk = make_array(output.front());
-        if (!check_exists(output_chunk[0])) {
+        if (!is_valid_ls_output(output_chunk[0])) {
           return -ENOENT;
         }
         path_string.assign(path);
@@ -856,8 +881,6 @@ static int adb_readlink(const char *path, char *buf, size_t size)
 
     queue<string> output;
 
-    string res;
-
     // get the number of slashes in the path
     int num_slashes, ii;
     for (num_slashes = ii = 0; ii < strlen(path); ii++)
@@ -873,14 +896,23 @@ static int adb_readlink(const char *path, char *buf, size_t size)
         output = adb_shell(command);
         if (output.empty()) 
             return -EINVAL; 
-        res = output.front();
-        fileData[path_string].statOutput = output.front();
+        // error format: "/sbin/healthd: Permission denied"
+        if (!output.front().compare(output.front().length() - 19, 19, ": Permission denied"))
+        {
+            fileData[path_string].statOutput.erase();
+        } else {
+            fileData[path_string].statOutput = output.front();
+        }
         fileData[path_string].timestamp = time(NULL);
     } else{
-        res = fileData[path_string].statOutput;
         cout << "from cache " << path << "\n";
     }
-    if (!check_exists(res)) {
+    string &res = fileData[path_string].statOutput;
+    if (fileData[path_string].statOutput.empty()) {
+        // file exists, but no info available
+        return -EINVAL;
+    }
+    if (!is_valid_ls_output(res)) {
       return -ENOENT;
     }
     cout << "adb_readlink " << res << endl;
