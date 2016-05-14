@@ -543,9 +543,9 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
     /* cannot tell between "no phone" and "empty directory" */
     while (output.size() > 0) {
-    	// skip lines too short to process (should not happen)
+        // skip lines too short to process (should not happen)
         if (output.front().length() < 3) continue;
-    	// we can get e.g. "permission denied" during listing, need to check every line separately
+        // we can get e.g. "permission denied" during listing, need to check every line separately
         if (!is_valid_ls_output(output.front())) {
             // error format: "lstat '//efs' failed: Permission denied"
             if (output.front().compare(0, 7, "lstat '") ||
@@ -553,28 +553,28 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                 continue;
 
             size_t nameStart = output.front().rfind("/") + 1;
-			const string& fname_l = output.front().substr(nameStart, output.front().find("' ") - nameStart);
-			filler(buf, fname_l.c_str(), NULL, 0);
-			const string& path_string_c = path_string
-				+ (path_string == "/" ? "" : "/") + fname_l;
+            const string& fname_l = output.front().substr(nameStart, output.front().find("' ") - nameStart);
+            filler(buf, fname_l.c_str(), NULL, 0);
+            const string& path_string_c = path_string
+                + (path_string == "/" ? "" : "/") + fname_l;
 
-			cout << "caching " << path_string_c << " = " << output.front() <<  endl;
-			fileData[path_string_c].statOutput.erase();
-			fileData[path_string_c].timestamp = time(NULL);
-			cout << "cached " << endl;
+            cout << "caching " << path_string_c << " = " << output.front() <<  endl;
+            fileData[path_string_c].statOutput.erase();
+            fileData[path_string_c].timestamp = time(NULL);
+            cout << "cached " << endl;
         } else {
-			// Start of filename = `ls -la` time separator + 4
-			size_t nameStart = output.front().find_first_of(":") + 4;
-			const string& fname_l = output.front().substr(nameStart);
-			const string fname_n = fname_l.substr(0, fname_l.find(" -> "));
-			filler(buf, fname_n.c_str(), NULL, 0);
-			const string path_string_c = path_string
-				+ (path_string == "/" ? "" : "/") + fname_n;
+            // Start of filename = `ls -la` time separator + 4
+            size_t nameStart = output.front().find_first_of(":") + 4;
+            const string& fname_l = output.front().substr(nameStart);
+            const string fname_n = fname_l.substr(0, fname_l.find(" -> "));
+            filler(buf, fname_n.c_str(), NULL, 0);
+            const string path_string_c = path_string
+                + (path_string == "/" ? "" : "/") + fname_n;
 
-			cout << "caching " << path_string_c << " = " << output.front() <<  endl;
-			fileData[path_string_c].statOutput = output.front();
-			fileData[path_string_c].timestamp = time(NULL);
-			cout << "cached " << endl;
+            cout << "caching " << path_string_c << " = " << output.front() <<  endl;
+            fileData[path_string_c].statOutput = output.front();
+            fileData[path_string_c].timestamp = time(NULL);
+            cout << "cached " << endl;
         }
         output.pop();
     }
@@ -908,7 +908,7 @@ static int adb_readlink(const char *path, char *buf, size_t size)
         cout << "from cache " << path << "\n";
     }
     string &res = fileData[path_string].statOutput;
-    if (fileData[path_string].statOutput.empty()) {
+    if (res.empty()) {
         // file exists, but no info available
         return -EINVAL;
     }
