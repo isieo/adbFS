@@ -388,7 +388,8 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         output = adb_shell(command);
         if (output.empty()) return -EAGAIN; /* no phone */
         // error format: "/sbin/healthd: Permission denied"
-        if (!output.front().compare(output.front().length() - 19, 19, ": Permission denied"))
+        if (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
+                                    sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))
         {
             fileData[path_string].statOutput.erase();
         } else {
