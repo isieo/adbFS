@@ -551,7 +551,8 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         // we can get e.g. "permission denied" during listing, need to check every line separately
         if (!is_valid_ls_output(output.front())) {
             // error format: "lstat '//efs' failed: Permission denied"
-            if (output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1, sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))
+            if (output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
+                                       sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))
                 continue;
 
             size_t nameStart = output.front().rfind("/") + 1;
@@ -899,7 +900,8 @@ static int adb_readlink(const char *path, char *buf, size_t size)
         if (output.empty()) 
             return -EINVAL; 
         // error format: "/sbin/healthd: Permission denied"
-        if (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1, sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))
+        if (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
+                                    sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))
         {
             fileData[path_string].statOutput.erase();
         } else {
