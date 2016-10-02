@@ -644,7 +644,7 @@ static int adb_read(const char *path, char *buf, size_t size, off_t offset,
     if(res == -1)
         res = -errno;
 
-    return size;
+    return res;
 }
 
 static int adb_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) {
