@@ -9,7 +9,7 @@ debug: CXXFLAGS += -DDEBUG -g
 debug: $(TARGET)
 
 adbfs.o: adbfs.cpp utils.h
-	$(CXX) -c -o adbfs.o adbfs.cpp $(CXXFLAGS) ${CPPFLAGS}
+	$(CXX) -c -o adbfs.o adbfs.cpp $(CXXFLAGS) $(CPPFLAGS)
 
 $(TARGET): adbfs.o
 	$(CXX) -o $(TARGET) adbfs.o $(LDFLAGS)
