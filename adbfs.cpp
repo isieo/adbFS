@@ -73,6 +73,7 @@
  
 #define FUSE_USE_VERSION 26
 #include "utils.h"
+#include <unistd.h>
 
 #include <execinfo.h>
 #include <signal.h>
