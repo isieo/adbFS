@@ -24,13 +24,13 @@
 
    @code fusermount -u mountpoint @endcode
 
-   as usual for FUSE.  
+   as usual for FUSE.
 
    The above assumes you have a fairly standard Android development
    setup, with adb in the path, busybox available on the Android
    device, etc.  Everything is very lightly tested and a work in
    progress.  Read the source and use with caution.
-   
+
 */
 
 /*
@@ -47,7 +47,7 @@
  *      Redistribution and use in source and binary forms, with or without
  *      modification, are permitted provided that the following conditions are
  *      met:
- *      
+ *
  *      * Redistributions of source code must retain the above copyright
  *        notice, this list of conditions and the following disclaimer.
  *      * Redistributions in binary form must reproduce the above
@@ -57,7 +57,7 @@
  *      * Neither the name of the  nor the names of its
  *        contributors may be used to endorse or promote products derived from
  *        this software without specific prior written permission.
- *      
+ *
  *      THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  *      "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  *      LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -70,7 +70,7 @@
  *      (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *      OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
- 
+
 #define FUSE_USE_VERSION 26
 #include "utils.h"
 
@@ -109,9 +109,9 @@ static const char PERMISSION_ERR_MSG[] = ": Permission denied";
 string tempDirPath;
 map<string,fileCache> fileData;
 void invalidateCache(const string& path) {
-    cout << "invalidate cache " << path << endl;    
+    cout << "invalidate cache " << path << endl;
     map<string, fileCache>::iterator it = fileData.find(path);
-    if (it != fileData.end()) 
+    if (it != fileData.end())
         fileData.erase(it);
 }
 
@@ -202,7 +202,7 @@ void adb_shell_escape_command(string& cmd)
 
 /**
    Modify, in place, the given path string by escaping special characters.
-   
+
    @param path the string to modify.
    @see shell_escape_command.
    @todo check/simplify escaping.
@@ -234,7 +234,7 @@ void makeTmpDir(void) {
 
 /**
    Set a given string to an adb push or pull command with given paths.
-   
+
    @param cmd string to which the adb command is written.
    @param push true for a push command, false for pull.
    @param local_path path on local host for push or pull command.
@@ -242,7 +242,7 @@ void makeTmpDir(void) {
    @see adb_pull.
    @see adb_push.
  */
-void adb_push_pull_cmd(string& cmd, const bool push, 
+void adb_push_pull_cmd(string& cmd, const bool push,
 		       const string& local_path, const string& remote_path)
 {
     cmd.assign("adb ");
@@ -309,7 +309,7 @@ int strmode_to_rawmode(const string& str) {
     case 'c': fmode |= S_IFCHR; break;
     case 'p': fmode |= S_IFIFO; break;
     }
-   
+
     if (str[1] == 'r') fmode |= S_IRUSR;
     if (str[2] == 'w') fmode |= S_IWUSR;
     switch (str[3]) {
@@ -325,7 +325,7 @@ int strmode_to_rawmode(const string& str) {
     case 's': fmode |= S_ISGID | S_IXGRP; break;
     case 'S': fmode |= S_ISGID; break;
     }
-    
+
     if (str[7] == 'r') fmode |= S_IROTH;
     if (str[8] == 'w') fmode |= S_IWOTH;
     switch (str[9]) {
@@ -368,7 +368,7 @@ bool is_valid_ls_output(const string& file) {
 
 static int adb_getattr(const char *path, struct stat *stbuf)
 {
-
+    cout << "adb_getattr" << endl;
     int res = 0;
     struct passwd * foruid;
     struct group * forgid;
@@ -380,7 +380,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     // TODO /caching?
     //
     vector<string> output_chunk;
-    if (fileData.find(path_string) ==  fileData.end() 
+    if (fileData.find(path_string) ==  fileData.end()
 	|| fileData[path_string].timestamp + 30 < time(NULL)) {
         string command = "ls -l -a -d '";
         command.append(path_string);
@@ -415,6 +415,8 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     // ls -lad explained
     // -rw-rw-r-- root     sdcard_rw   763362 2012-06-22 02:16 file.html
     //
+    // Alternative
+    // -rw-r--r--   1 root   root      5905 1970-01-01 01:00 ueventd.rc
     //stbuf->st_dev = atoi(output_chunk[1].c_str());     /* ID of device containing file */
     //
     // In octal,
@@ -422,19 +424,23 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     // xxx is regular mode e.g. 755 = rwxr-xr-x
     //
 
-    stbuf->st_ino = 1; // atoi(output_chunk[7].c_str());     /* inode number */
-    //stbuf->st_mode = raw_mode | 0700;    /* protection */
-    stbuf->st_mode = strmode_to_rawmode(output_chunk[0]);
+    stbuf->st_ino = 1;      /* inode number, fake. */
 
-    stbuf->st_nlink = 1;   /* number of hard links */
+    stbuf->st_mode = strmode_to_rawmode(output_chunk[0]); // | 0700
 
-    foruid = getpwnam(output_chunk[1].c_str());
+    int uid_offset = 0;
+
+    stbuf->st_nlink = atoi(output_chunk[1].c_str());
+    if (stbuf->st_nlink > 0) uid_offset = 1;
+    else stbuf->st_nlink = 1;
+
+    foruid = getpwnam(output_chunk[uid_offset + 1].c_str());
     if (foruid)
 	    stbuf->st_uid = foruid->pw_uid;     /* user ID of owner */
     else
 	    stbuf->st_uid = 98; /* 98 has been chosen (poorly) so that it doesn't map to anything */
 
-    forgid = getgrnam(output_chunk[2].c_str());
+    forgid = getgrnam(output_chunk[uid_offset + 2].c_str());
     if (forgid)
 	    stbuf->st_gid = forgid->gr_gid;     /* group ID of owner */
     else
@@ -449,16 +455,17 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     switch (stbuf->st_mode & S_IFMT) {
     case S_IFBLK:
     case S_IFCHR:
-	    stbuf->st_rdev = atoi(output_chunk[3].c_str()) * 256 + atoi(output_chunk[4].c_str());
+	    stbuf->st_rdev = atoi(output_chunk[uid_offset + 3].c_str()) * 256 +
+                         atoi(output_chunk[uid_offset + 4].c_str());
 	    stbuf->st_size = 0;
-	    iDate = 5;
+	    iDate = uid_offset + 5;
 	    break;
 
 	    break;
 
     case S_IFREG:
-	    stbuf->st_size = atoi(output_chunk[3].c_str());    /* total size, in bytes */
-	    iDate = 4;
+	    stbuf->st_size = atoi(output_chunk[uid_offset + 3].c_str());    /* total size, in bytes */
+	    iDate = uid_offset + 4;
 	    break;
 
     default:
@@ -467,16 +474,16 @@ static int adb_getattr(const char *path, struct stat *stbuf)
     case S_IFLNK:
     case S_IFDIR:
 	    stbuf->st_size = 0;
-	    iDate = 3;
+	    iDate = uid_offset + 3;
+        if (output_chunk[iDate].find_first_of("-") == string::npos) ++iDate;
 	    break;
     }
 
     stbuf->st_blksize = 0; // TODO: THIS IS SMELLY
     stbuf->st_blocks = 1;
 
-    //for (int k = 0; k < output_chunk.size(); ++k) cout << output_chunk[k] << " ";    
+    //for (int k = 0; k < output_chunk.size(); ++k) cout << output_chunk[k] << " ";
     //cout << endl;
-    
 
     vector<string> ymd = make_array(output_chunk[iDate], "-");
     vector<string> hm = make_array(output_chunk[iDate + 1], ":");
@@ -513,8 +520,8 @@ size_t find_nth(int n, const string& substr, const string& corpus) {
     size_t p = 0;
     while (n--) {
         if ((( p = corpus.find_first_of(substr, p) )) == string::npos) return string::npos;
-        p = corpus.find_first_not_of(substr, p); 
-    }   
+        p = corpus.find_first_not_of(substr, p);
+    }
     return p;
 }
 
@@ -545,16 +552,20 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     output = adb_shell(command);
 
     /* cannot tell between "no phone" and "empty directory" */
+    cout << "found files: " << output.size() << endl;
     while (output.size() > 0) {
         // skip lines too short to process (should not happen)
         if (output.front().length() >= 3) {
             // we can get e.g. "permission denied" during listing, need to check every line separately
             if (!is_valid_ls_output(output.front())) {
                 // error format: "lstat '//efs' failed: Permission denied"
-                if (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
-                                            sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG)) {
+                if (
+                     output.front().length() >= sizeof(PERMISSION_ERR_MSG) &&
+                     (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
+                                            sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))) {
                     size_t nameStart = output.front().rfind("/") + 1;
                     const string& fname_l = output.front().substr(nameStart, output.front().find("' ") - nameStart);
+                    cout << "Adding file:" << fname_l << ":" << endl;
                     filler(buf, fname_l.c_str(), NULL, 0);
                     const string& path_string_c = path_string
                         + (path_string == "/" ? "" : "/") + fname_l;
@@ -569,6 +580,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                 size_t nameStart = output.front().find_first_of(":") + 4;
                 const string& fname_l = output.front().substr(nameStart);
                 const string fname_n = fname_l.substr(0, fname_l.find(" -> "));
+                cout << "Adding file:" << fname_n <<":" << endl;
                 filler(buf, fname_n.c_str(), NULL, 0);
                 const string path_string_c = path_string
                     + (path_string == "/" ? "" : "/") + fname_n;
@@ -581,6 +593,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         }
         output.pop();
     }
+    cout << "done with found files" << endl;
 
 
     return 0;
@@ -740,6 +753,7 @@ static int adb_truncate(const char *path, off_t size) {
 
 
     queue<string> output;
+    cout << "adb_truncate" << endl;
     string command = "ls -l -a -d '";
     command.append(path_string);
     command.append("'");
@@ -753,7 +767,7 @@ static int adb_truncate(const char *path, off_t size) {
     fileTruncated[path_string] = true;
 
     invalidateCache(path_string);
-    
+
     cout << "truncate[path=" << local_path_string << "][size=" << size << "]" << endl;
 
     return truncate(local_path_string.c_str(),size);
@@ -879,6 +893,7 @@ static int adb_unlink(const char *path) {
 
 static int adb_readlink(const char *path, char *buf, size_t size)
 {
+    cout << "adb_readlink" << endl;
     string path_string(path);
     shell_escape_path(path_string);
 
@@ -891,17 +906,19 @@ static int adb_readlink(const char *path, char *buf, size_t size)
             num_slashes++;
     if (num_slashes >= 1) num_slashes--;
 
-    if (fileData.find(path_string) ==  fileData.end() 
+    if (fileData.find(path_string) ==  fileData.end()
 	|| fileData[path_string].timestamp + 30 < time(NULL)) {
         string command = "ls -l -a -d '";
         command.append(path_string);
         command.append("'");
         output = adb_shell(command);
-        if (output.empty()) 
-            return -EINVAL; 
+        if (output.empty())
+            return -EINVAL;
         // error format: "/sbin/healthd: Permission denied"
-        if (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
-                                    sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))
+
+        if ((output.front().length() >= sizeof(PERMISSION_ERR_MSG)) &&
+           (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
+                                    sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG)))
         {
             fileData[path_string].statOutput.erase();
         } else {
