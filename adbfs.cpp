@@ -388,8 +388,10 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         output = adb_shell(command);
         if (output.empty()) return -EAGAIN; /* no phone */
         // error format: "/sbin/healthd: Permission denied"
-        if (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
-                                    sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))
+        if (
+            output.front().length() > sizeof(PERMISSION_ERR_MSG) &&
+            (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
+                                    sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG)))
         {
             fileData[path_string].statOutput.erase();
         } else {
@@ -560,7 +562,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
             if (!is_valid_ls_output(output.front())) {
                 // error format: "lstat '//efs' failed: Permission denied"
                 if (
-                     output.front().length() >= sizeof(PERMISSION_ERR_MSG) &&
+                     output.front().length() > sizeof(PERMISSION_ERR_MSG) &&
                      (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
                                             sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG))) {
                     size_t nameStart = output.front().rfind("/") + 1;
@@ -916,7 +918,7 @@ static int adb_readlink(const char *path, char *buf, size_t size)
             return -EINVAL;
         // error format: "/sbin/healthd: Permission denied"
 
-        if ((output.front().length() >= sizeof(PERMISSION_ERR_MSG)) &&
+        if ((output.front().length() > sizeof(PERMISSION_ERR_MSG)) &&
            (!output.front().compare(output.front().length() - sizeof(PERMISSION_ERR_MSG) + 1,
                                     sizeof(PERMISSION_ERR_MSG) - 1, PERMISSION_ERR_MSG)))
         {
