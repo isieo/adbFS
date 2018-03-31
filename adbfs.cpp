@@ -861,7 +861,7 @@ static int adb_rmdir(const char *path) {
     shell_escape_path(local_path_string);
 
 
-    string command = "rm -r '";
+    string command = "rmdir '";
     command.append(path_string);
     command.append("'");
     adb_shell(command);
