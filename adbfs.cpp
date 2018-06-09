@@ -101,7 +101,7 @@ void shell_escape_command(string&);
 void adb_shell_escape_command(string&);
 queue<string> adb_push(const string&, const string&);
 queue<string> adb_pull(const string&, const string&);
-queue<string> adb_shell(const string&);
+queue<string> adb_shell(const string&, bool);
 queue<string> shell(const string&);
 
 static const char PERMISSION_ERR_MSG[] = ": Permission denied";
@@ -144,13 +144,14 @@ queue<string> shell(const string& command)
    @see exec_command.
    @todo perhaps avoid use of local shell to simplify escaping.
  */
-queue<string> adb_shell(const string& command)
+queue<string> adb_shell(const string& command, bool getStderr = false)
 {
     string actual_command;
     actual_command.assign(command);
     //adb_shell_escape_command(actual_command);
     actual_command.insert(0, "adb shell \"");
     actual_command.append("\"");
+    if (getStderr) actual_command.append(" 2>&1");
     return exec_command(actual_command);
 }
 
@@ -385,7 +386,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
         string command = "ls -l -a -d '";
         command.append(path_string);
         command.append("'");
-        output = adb_shell(command);
+        output = adb_shell(command, true);
         if (output.empty()) return -EAGAIN; /* no phone */
         // error format: "/sbin/healthd: Permission denied"
         if (
