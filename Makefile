@@ -1,5 +1,5 @@
-CXXFLAGS=$(shell pkg-config fuse --cflags)
-LDFLAGS=$(shell pkg-config fuse --libs)
+CXXFLAGS=-Wall $(shell pkg-config fuse --cflags)
+LDFLAGS=-Wall $(shell pkg-config fuse --libs)
 
 TARGET=adbfs
 

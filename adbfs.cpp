@@ -990,7 +990,7 @@ int main(int argc, char *argv[])
 {
     signal(SIGSEGV, handler);   // install our handler
     makeTmpDir();
-    memset(&adbfs_oper, sizeof(adbfs_oper), 0);
+    memset(&adbfs_oper, 0, sizeof(adbfs_oper));
     adbfs_oper.readdir= adb_readdir;
     adbfs_oper.getattr= adb_getattr;
     adbfs_oper.access= adb_access;
