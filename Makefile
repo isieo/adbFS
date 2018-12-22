@@ -2,6 +2,8 @@ CXXFLAGS=-Wall $(shell pkg-config fuse --cflags)
 LDFLAGS=-Wall $(shell pkg-config fuse --libs)
 
 TARGET=adbfs
+DESTDIR?=/
+INSTALL_DIR?=${DESTDIR}/usr/
 
 all:	$(TARGET)
 
@@ -19,5 +21,9 @@ $(TARGET): adbfs.o
 clean:
 	rm -rf *.o html/ latex/ $(TARGET)
 
-doc:
-	doxygen Doxyfile
+doc: Doxyfile
+	doxygen $<
+
+install: ${TARGET}
+	install -d ${INSTALL_DIR}/bin
+	install -s $< ${INSTALL_DIR}/bin/
