@@ -708,9 +708,22 @@ static int adb_flush(const char *path, struct fuse_file_info *fi) {
 }
 
 static int adb_release(const char *path, struct fuse_file_info *fi) {
+    // just like in the other functions
+    string path_string;
+    string local_path_string;
+    path_string.assign(path);
+    local_path_string = tempDirPath;
+    string_replacer(path_string,"/","-");
+    local_path_string.append(path_string);
+    path_string.assign(path);
+
+    // untouched
     int fd = fi->fh;
     filePendingWrite.erase(filePendingWrite.find(fd));
     close(fd);
+    
+    // remove local copy
+    unlink(local_path_string.c_str());    
     return 0;
 }
 
