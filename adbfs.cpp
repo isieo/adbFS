@@ -467,7 +467,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 	    break;
 
     case S_IFREG:
-	    stbuf->st_size = atoi(output_chunk[uid_offset + 3].c_str());    /* total size, in bytes */
+	    stbuf->st_size = atol(output_chunk[uid_offset + 3].c_str());    /* total size, in bytes */
 	    iDate = uid_offset + 4;
 	    break;
 
@@ -482,8 +482,9 @@ static int adb_getattr(const char *path, struct stat *stbuf)
 	    break;
     }
 
-    stbuf->st_blksize = 0; // TODO: THIS IS SMELLY
-    stbuf->st_blocks = 1;
+    // du calculates sizes based on number of 512b blocks
+    stbuf->st_blksize = 512;
+    stbuf->st_blocks = (stbuf->st_size + 256) / 512;
 
     //for (int k = 0; k < output_chunk.size(); ++k) cout << output_chunk[k] << " ";
     //cout << endl;
