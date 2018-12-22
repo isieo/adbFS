@@ -73,6 +73,7 @@
 
 #define FUSE_USE_VERSION 26
 #include "utils.h"
+#include <unistd.h>
 
 #include <execinfo.h>
 #include <signal.h>
@@ -709,9 +710,22 @@ static int adb_flush(const char *path, struct fuse_file_info *fi) {
 }
 
 static int adb_release(const char *path, struct fuse_file_info *fi) {
+    // just like in the other functions
+    string path_string;
+    string local_path_string;
+    path_string.assign(path);
+    local_path_string = tempDirPath;
+    string_replacer(path_string,"/","-");
+    local_path_string.append(path_string);
+    path_string.assign(path);
+
+    // untouched
     int fd = fi->fh;
     filePendingWrite.erase(filePendingWrite.find(fd));
     close(fd);
+    
+    // remove local copy
+    unlink(local_path_string.c_str());    
     return 0;
 }
 
@@ -978,7 +992,7 @@ int main(int argc, char *argv[])
 {
     signal(SIGSEGV, handler);   // install our handler
     makeTmpDir();
-    memset(&adbfs_oper, sizeof(adbfs_oper), 0);
+    memset(&adbfs_oper, 0, sizeof(adbfs_oper));
     adbfs_oper.readdir= adb_readdir;
     adbfs_oper.getattr= adb_getattr;
     adbfs_oper.access= adb_access;
