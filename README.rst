@@ -9,6 +9,9 @@ You will need at least the following on Debian:
 - android-tools-adb
 - libfuse-dev
 - pkg-config
+- cmake
+
+Run `make` to build
 
 Install
 -------
