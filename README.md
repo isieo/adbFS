@@ -29,6 +29,10 @@ You can now mount your device (also from the platform-tools dir):
 
     ./adbfs ~/droid
 
+If you want to trigger a media rescan after every operation, use the option `-o rescan`:
+
+    ./adbfs -o rescan ~/droid
+
 Have fun!
 
 ## Troubleshooting
