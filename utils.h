@@ -165,8 +165,8 @@ queue<string> exec_command(const string& command)
     {
         tmp_string.assign(buff);
         while (tmp_string.size() > 0 &&
-               tmp_string[tmp_string.size() - 1] == '\n' ||
-               tmp_string[tmp_string.size() - 1] == '\r') {
+               (tmp_string[tmp_string.size() - 1] == '\n' ||
+                tmp_string[tmp_string.size() - 1] == '\r')) {
           tmp_string.erase(tmp_string.size()-1);
         }
         output.push(tmp_string);
