@@ -777,16 +777,10 @@ static int adb_access(const char *path, int mask) {
 
 static int adb_utimens(const char *path, const struct timespec ts[2]) {
     string path_string;
-    string local_path_string;
     path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    local_path_string = tempDirPath;
-    string_replacer(path_string,"/","-");
-    local_path_string.append(path_string);
-    path_string.assign(path);
 
     shell_escape_path(path_string);
-    shell_escape_path(local_path_string);
 
     queue<string> output;
     string command = "touch '";
@@ -794,6 +788,9 @@ static int adb_utimens(const char *path, const struct timespec ts[2]) {
     command.append("'");
     cout << command<<"\n";
     adb_shell(command);
+
+    // If we forgot to mount -o rescan then we can remount and touch to trigger the scan.
+    if (adbfs_conf.rescan) adb_rescan_file(path_string);
 
     return 0;
 }
