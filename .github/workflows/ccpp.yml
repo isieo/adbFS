@@ -10,6 +10,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: build-deps
-      run: apt-get install libfuse-dev
+      run: sudo apt-get install libfuse-dev
     - name: make
       run: make
