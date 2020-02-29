@@ -75,6 +75,7 @@
 #include "utils.h"
 #include <unistd.h>
 
+#include<stddef.h>
 #include <execinfo.h>
 #include <signal.h>
 #include <sys/stat.h>
@@ -118,6 +119,21 @@ void invalidateCache(const string& path) {
 
 map<int,bool> filePendingWrite;
 map<string,bool> fileTruncated;
+
+/**
+   Custom options
+ */
+
+struct adb_config {
+    bool rescan;
+};
+
+static struct fuse_opt adb_opts[] = {
+    { "rescan", offsetof(struct adb_config, rescan), true },
+    FUSE_OPT_END
+};
+
+static struct adb_config adbfs_conf;
 
 /**
    Return the result of executing the given command string, using
@@ -291,6 +307,30 @@ queue<string> adb_push(const string& local_source,
     queue<string> res = exec_command(cmd);
     invalidateCache(remote_destination);
     return res;
+}
+
+/**
+   Tells Android to rescan the remote file for media changes.
+ */
+queue<string> adb_rescan_file(const string& remote_path)
+{
+    string cmd;
+    cmd.assign("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://");
+    cmd.append(remote_path);
+    cmd.append("'");
+    return adb_shell(cmd);
+}
+
+/**
+   Tells Android to remove the remote directory from its media database.
+ */
+queue<string> adb_rescan_dir_removed(const string& remote_path)
+{
+    string cmd;
+    cmd.assign("am broadcast -a android.intent.action.MEDIA_UNMOUNTED -d 'file://");
+    cmd.append(remote_path);
+    cmd.append("'");
+    return adb_shell(cmd);
 }
 
 /**
@@ -705,6 +745,7 @@ static int adb_flush(const char *path, struct fuse_file_info *fi) {
         filePendingWrite[fd] = false;
         adb_push(local_path_string, path_string);
         adb_shell("sync");
+        if (adbfs_conf.rescan) adb_rescan_file(path_string);
     }
     return 0;
 }
@@ -736,16 +777,10 @@ static int adb_access(const char *path, int mask) {
 
 static int adb_utimens(const char *path, const struct timespec ts[2]) {
     string path_string;
-    string local_path_string;
     path_string.assign(path);
     fileData[path_string].timestamp = fileData[path_string].timestamp + 50;
-    local_path_string = tempDirPath;
-    string_replacer(path_string,"/","-");
-    local_path_string.append(path_string);
-    path_string.assign(path);
 
     shell_escape_path(path_string);
-    shell_escape_path(local_path_string);
 
     queue<string> output;
     string command = "touch '";
@@ -753,6 +788,9 @@ static int adb_utimens(const char *path, const struct timespec ts[2]) {
     command.append("'");
     cout << command<<"\n";
     adb_shell(command);
+
+    // If we forgot to mount -o rescan then we can remount and touch to trigger the scan.
+    if (adbfs_conf.rescan) adb_rescan_file(path_string);
 
     return 0;
 }
@@ -858,6 +896,10 @@ static int adb_rename(const char *from, const char *to) {
     command.append("'");
     cout << "Renaming " << from << " to " << to <<"\n";
     adb_shell(command);
+    if (adbfs_conf.rescan) {
+        adb_rescan_file(from);
+        adb_rescan_file(to);
+    }
     invalidateCache(string(from));
     invalidateCache(string(to));
     return 0;
@@ -881,6 +923,7 @@ static int adb_rmdir(const char *path) {
     command.append(path_string);
     command.append("'");
     adb_shell(command);
+    if (adbfs_conf.rescan) adb_rescan_dir_removed(path_string);
     invalidateCache(path_string);
 
     //rmdir(local_path_string.c_str());
@@ -904,6 +947,7 @@ static int adb_unlink(const char *path) {
     command.append(path_string);
     command.append("'");
     adb_shell(command);
+    if (adbfs_conf.rescan) adb_rescan_file(path_string);
     invalidateCache(path_string);
     unlink(local_path_string.c_str());
     return 0;
@@ -1010,5 +1054,10 @@ int main(int argc, char *argv[])
     adbfs_oper.unlink = adb_unlink;
     adbfs_oper.readlink = adb_readlink;
     adb_shell("ls");
-    return fuse_main(argc, argv, &adbfs_oper, NULL);
+
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    memset(&adbfs_conf, 0, sizeof(adbfs_conf));
+    fuse_opt_parse(&args, &adbfs_conf, adb_opts, NULL);
+
+    return fuse_main(args.argc, args.argv, &adbfs_oper, NULL);
 }
