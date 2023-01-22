@@ -15,9 +15,13 @@ RUN apt install -y build-essential git pkg-config
 RUN apt install -y fuse libfuse-dev
 
 ADD ./* /src/
+ADD ./docker/* /src/docker/
+
 WORKDIR /src
 RUN make
 
+RUN chmod +x /src/docker/run-docker-test.sh
+CMD /src/docker/run-docker-test.sh
 
 
 # COPY --from=buildenv /src/adbfs /usr/bin/adbfs
