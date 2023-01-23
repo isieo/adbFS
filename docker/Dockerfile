@@ -6,7 +6,6 @@
 # RUN make
 
 
-
 FROM budtmo/docker-android-x86-10.0
 RUN apt update
 
@@ -21,6 +20,8 @@ WORKDIR /src
 RUN make
 
 RUN chmod +x /src/docker/run-docker-test.sh
+
+WORKDIR /root
 CMD /src/docker/run-docker-test.sh
 
 
